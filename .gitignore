@@ -1,0 +1,6 @@
+*.mp4
+*.gif
+*.python-version
+*.pyc
+
+__pycache__/
