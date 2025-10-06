@@ -1,7 +1,7 @@
-from gif_maker.gif_maker import GifMaker
+from simplegif.simplegif import SimpleGIF
 
 if __name__ == "__main__":
-    gif_maker = GifMaker()
+    gif_maker = SimpleGIF()
     gif_maker.process(
         file_path='inputs/robot.mp4',
         output_path='outputs',

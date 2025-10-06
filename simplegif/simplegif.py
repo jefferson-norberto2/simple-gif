@@ -11,7 +11,7 @@ from PIL.Image import fromarray, Image
 from typing import List
 from tqdm import tqdm
 
-class GifMaker:
+class SimpleGIF:
     def __init__(self):
         self._scale = None
         self._less_colors_flag = None
