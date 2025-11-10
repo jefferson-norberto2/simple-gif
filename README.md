@@ -41,7 +41,7 @@ A Python tool to convert video files into optimized GIFs with customizable optio
 3. Use the `convert_file` method to convert a single video file.
     ```python
     gif_maker.convert_file(
-        file_path='inputs/example.mp4',
+        path='inputs/example.mp4',
         output_path='outputs',
         scale=0.6,
         less_colors=True,
@@ -53,7 +53,7 @@ A Python tool to convert video files into optimized GIFs with customizable optio
 4. Use the `convert_folder` method to convert all video files in a folder.
     ```python
     gif_maker.convert_folder(
-        folder_path='inputs/',
+        path='inputs/',
         output_path='outputs',
         scale=0.6,
         less_colors=True,
