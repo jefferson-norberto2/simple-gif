@@ -1,9 +1,10 @@
-from simplegif.simplegif import SimpleGIF
+from simplegif import SimpleGIF
 
 if __name__ == "__main__":
     gif_maker = SimpleGIF()
-    gif_maker.process(
-        file_path='inputs/robot.mp4',
+
+    gif_maker.convert_folder(
+        path='inputs/',
         output_path='outputs',
         scale=0.6,
         less_colors=True,
