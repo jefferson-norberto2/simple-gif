@@ -117,6 +117,7 @@ class SimpleGIF:
             max_frames (int): Maximum number of frames to process.
             frame_skip (int): Number of frames to skip between processed frames.
         '''
+        self._frames = []
         self._cap = VideoCapture(f'{self._input_path}/{self._last_name_file}')
         
         self._width = int(self._cap.get(CAP_PROP_FRAME_WIDTH) * self._scale)
