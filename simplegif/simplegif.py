@@ -131,7 +131,7 @@ class SimpleGIF:
         print(f'Reading {self._last_name_file} video file')
 
         for _ in tqdm(range(min(total_frames, max_frames))):
-            if image_count % frame_skip == 0:
+            if image_count % frame_skip == 0 and frame is not None:
                 frame = resize(frame, (self._width, self._height))
                 rgb_frame = cvtColor(frame, COLOR_BGR2RGB)
                 

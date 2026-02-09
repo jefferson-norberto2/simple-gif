@@ -1,7 +1,27 @@
+# Video extensions
+*.avi
+*.mov
 *.mp4
+*.mkv
+*.flv
+*.wmv
+*.webm
+*.mpeg
+*.mpg
+*.3gp
+*.m4v
+*.vob
+*.ogv
+*.ts
+*.rmvb
+*.f4v
+*.swf
+*.m2ts
+
 *.gif
 *.python-version
 *.pyc
 
 __pycache__/
 dist/
+.vscode/
