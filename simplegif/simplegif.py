@@ -55,7 +55,8 @@ class SimpleGIF:
                 scale=0.6, 
                 less_colors=False,
                 max_frames=2000, 
-                frame_skip=5):
+                frame_skip=5,
+                progress_callback=None):
         '''Convert a single video file to GIF format.
         
         Args:
@@ -75,7 +76,7 @@ class SimpleGIF:
             if exists(save_path):
                 print(f"Error: {save_path} already exists on {self._output_path}.", end="\n\n")
             else:
-                self._process_video(max_frames, frame_skip)
+                self._process_video(max_frames, frame_skip, progress_callback)
                 self._save_gif()
     
     def convert_folder(self, path='inputs/', 
@@ -110,7 +111,7 @@ class SimpleGIF:
                     frame_skip=frame_skip
                 )
     
-    def _process_video(self, max_frames:int, frame_skip:int):
+    def _process_video(self, max_frames:int, frame_skip:int, progress_callback=None):
         '''Process the video file and extract frames.
         
         Args:
@@ -129,6 +130,8 @@ class SimpleGIF:
         _, frame = self._cap.read()
 
         print(f'Reading {self._last_name_file} video file')
+        if progress_callback:
+            progress_callback(0, total_frames)
 
         for _ in tqdm(range(min(total_frames, max_frames))):
             if image_count % frame_skip == 0 and frame is not None:
@@ -143,6 +146,9 @@ class SimpleGIF:
                 
             image_count += 1
             _, frame = self._cap.read()
+            
+            if progress_callback:
+                progress_callback(image_count, total_frames)
 
         self._cap.release()
     

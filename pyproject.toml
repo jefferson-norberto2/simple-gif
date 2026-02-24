@@ -1,6 +1,6 @@
 [project]
 name = "simplegif"
-version = "1.1.2"
+version = "1.2.2"
 description = ""
 authors = [{ name = "jefferson-norberto2", email = "jmn@cin.ufpe.br" }]
 license = { text = "Apache-2.0" }

@@ -116,14 +116,28 @@ class GifConverterApp:
         lbl_process = ctk.CTkLabel(self.main_frame, text="Processando seu GIF...", font=("Roboto Medium", 18))
         lbl_process.pack(pady=(60, 20))
         
-        # Barra de progresso indeterminada
+        # REMOVA o modo "indeterminate" e inicie a barra no zero
         self.progressbar = ctk.CTkProgressBar(self.main_frame, width=300)
         self.progressbar.pack(pady=10)
-        self.progressbar.configure(mode="indeterminnate")
-        self.progressbar.start()
+        self.progressbar.set(0.0) # Inicia vazia (modo determinate é o padrão)
 
-        lbl_wait = ctk.CTkLabel(self.main_frame, text="Isso pode levar alguns segundos.", text_color="gray")
-        lbl_wait.pack(pady=10)
+        # Guarde a referência do label para podermos atualizar a porcentagem em texto também
+        self.lbl_wait = ctk.CTkLabel(self.main_frame, text="Iniciando conversão...", text_color="gray")
+        self.lbl_wait.pack(pady=10)
+    
+    # --- NOVA FUNÇÃO DE CALLBACK ---
+    def update_progress(self, current_frame, total_frames):
+        """Atualiza a barra de progresso com base no frame atual"""
+        if total_frames > 0:
+            # Calcula o progresso de 0.0 a 1.0
+            progress = current_frame / total_frames
+            
+            # Atualiza a barra
+            self.progressbar.set(progress)
+            
+            # Atualiza o texto (Ex: "Processando: 45%")
+            percentage = int(progress * 100)
+            self.lbl_wait.configure(text=f"Carregando arquivo: {percentage}%")
 
     def start_processing(self):
         self.show_screen_processing()
@@ -145,7 +159,8 @@ class GifConverterApp:
                 scale=0.6,
                 less_colors=True,
                 max_frames=2000,
-                frame_skip=5
+                frame_skip=5,
+                progress_callback=self.update_progress
             )
             # Sucesso
             self.root.after(0, self.show_screen_result)
