@@ -69,13 +69,13 @@ class SimpleGIF:
             frame_skip (int): Number of frames to skip between processed frames.
         '''
         if not isfile(path):
-            print(f"Error: {path} is not a valid file path.", end="\n\n")
+           raise ValueError(f"Error: {path} is not a valid file path.", -1)
         else:
             self._adjust_parameters(path, output_path, scale, less_colors)
 
             save_path = f"{self._output_path}/{self._save_name}.gif"
             if exists(save_path):
-                print(f"Error: {save_path} already exists on {self._output_path}.", end="\n\n")
+                raise FileExistsError(f"{self._save_name}.gif já existe.", -2)
             else:
                 self._process_video(max_frames, frame_skip, progress_callback)
     
@@ -97,8 +97,7 @@ class SimpleGIF:
         '''
         
         if not isdir(path):
-            print(f"Error: {path} is not a valid folder path.", end="\n\n")
-            return
+            raise ValueError(f"Error: {path} is not a valid folder path.", -3)
         
         for file_name in listdir(path):
             if file_name.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
@@ -155,7 +154,7 @@ class SimpleGIF:
 
         self._cap.release()
 
-    def save_gif(self, progress_callback=None):
+    def save_gif(self, progress_callback=None) -> int:
         '''Save the processed frames as a GIF file iteratively to track progress.'''
         if self._frames:
             save_path = f"{self._output_path}/{self._save_name}.gif"
@@ -181,7 +180,8 @@ class SimpleGIF:
             print("GIF saved successfully.", end="\n\n")
         else:
             print("No frames to save.", end="\n\n")
-    
+            return -1
+        return 0
     def _save_gif(self):
         '''Save the processed frames as a GIF file.
         '''

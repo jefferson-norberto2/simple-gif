@@ -27,6 +27,9 @@ class GifConverterApp:
         # Container principal
         self.main_frame = ctk.CTkFrame(self.root, corner_radius=15)
         self.main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+
+        self.error_message = ""
+        self.error_code = 0
         
         # Inicia na primeira tela
         self.show_screen_initial()
@@ -183,40 +186,56 @@ class GifConverterApp:
             # Sucesso
             self.root.after(0, self.show_screen_result)
         except Exception as e:
-            print(f"Erro: {e}")
-            # Aqui você poderia criar uma tela de erro se quisesse
+            self.error_message = str(e.args[0])
+            self.error_code = e.args[1] if len(e.args) > 1 else -999
+            self.root.after(0, self.show_screen_result, True)
 
     # --- TELA 4: Resultado ---
-    def show_screen_result(self):
+    def show_screen_result(self, have_error=False):
         self.clear_frame()
         
-        lbl_success = ctk.CTkLabel(self.main_frame, text="Concluído!", font=("Roboto Medium", 22), text_color="#2CC985")
-        lbl_success.pack(pady=(40, 10))
+        if have_error:
+            lbl_success = ctk.CTkLabel(self.main_frame, text="Erro durante a conversão!", font=("Roboto Medium", 22), text_color="#FF0000")
+            lbl_success.pack(pady=(40, 10))
+            lbl_info = ctk.CTkLabel(self.main_frame, text=f"{self.error_message}", font=("Roboto", 12))
+            lbl_info.pack(pady=(10, 5))
+            if self.error_code in [-1, -2]: # Arquivo ja existe ou caminho inválido
+                btn_open_folder = ctk.CTkButton(
+                    self.main_frame, 
+                    text="📁 Abrir Pasta de Destino", 
+                    command=self.open_output_folder,
+                    fg_color="#3B8ED0",
+                    hover_color="#36719F"
+                )
+                btn_open_folder.pack(pady=10)
+        else:
+            lbl_success = ctk.CTkLabel(self.main_frame, text="Concluído!", font=("Roboto Medium", 22), text_color="#2CC985")
+            lbl_success.pack(pady=(40, 10))
         
-        lbl_info = ctk.CTkLabel(self.main_frame, text="Arquivo salvo em:", font=("Roboto", 12))
-        lbl_info.pack(pady=(10, 5))
-        
-        # --- CONTAINER PARA A CAIXA DE TEXTO E O BOTÃO DE ABRIR ---
-        result_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        result_frame.pack(fill="x", padx=30, pady=10)
-        result_frame.grid_columnconfigure(0, weight=1) # Faz a entry expandir
-        
-        # Caixa de texto
-        entry_out = ctk.CTkEntry(result_frame, justify="left")
-        entry_out.insert(0, self.output_file)
-        entry_out.configure(state="readonly")
-        entry_out.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        
-        # Botão de Ícone para abrir a pasta
-        btn_open_folder = ctk.CTkButton(
-            result_frame, 
-            text="📁", 
-            width=40, 
-            command=self.open_output_folder,
-            fg_color="#3B8ED0",
-            hover_color="#36719F"
-        )
-        btn_open_folder.grid(row=0, column=1)
+            lbl_info = ctk.CTkLabel(self.main_frame, text="Arquivo salvo em:", font=("Roboto", 12))
+            lbl_info.pack(pady=(10, 5))
+            
+            # --- CONTAINER PARA A CAIXA DE TEXTO E O BOTÃO DE ABRIR ---
+            result_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+            result_frame.pack(fill="x", padx=30, pady=10)
+            result_frame.grid_columnconfigure(0, weight=1) # Faz a entry expandir
+            
+            # Caixa de texto
+            entry_out = ctk.CTkEntry(result_frame, justify="left")
+            entry_out.insert(0, self.output_file)
+            entry_out.configure(state="readonly")
+            entry_out.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+            
+            # Botão de Ícone para abrir a pasta
+            btn_open_folder = ctk.CTkButton(
+                result_frame, 
+                text="📁", 
+                width=40, 
+                command=self.open_output_folder,
+                fg_color="#3B8ED0",
+                hover_color="#36719F"
+            )
+            btn_open_folder.grid(row=0, column=1)
         
         btn_ok = ctk.CTkButton(self.main_frame, text="Novo Arquivo", command=self.show_screen_initial, width=150)
         btn_ok.pack(pady=30)
