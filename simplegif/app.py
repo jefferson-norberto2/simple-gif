@@ -2,6 +2,8 @@ import customtkinter as ctk
 from tkinter import filedialog
 import threading
 import os
+import subprocess
+import platform
 from simplegif import SimpleGIF
 
 
@@ -109,47 +111,51 @@ class GifConverterApp:
         )
         btn_create.pack(side="right", expand=True, fill="x", padx=(10, 0))
 
-    # --- TELA 3: Processando (Com Barra de Progresso) ---
+    # --- TELA 3: Processando (Com Barra de Progresso e Passos) ---
     def show_screen_processing(self):
         self.clear_frame()
         
         lbl_process = ctk.CTkLabel(self.main_frame, text="Processando seu GIF...", font=("Roboto Medium", 18))
-        lbl_process.pack(pady=(60, 20))
+        lbl_process.pack(pady=(40, 20))
+        
+        # --- LABEL PARA OS PASSOS ---
+        self.lbl_step = ctk.CTkLabel(self.main_frame, text="Passo 1/3: Lendo Arquivo", font=("Roboto", 12), text_color="#2CC985")
+        self.lbl_step.pack(pady=(0, 5))
         
         # REMOVA o modo "indeterminate" e inicie a barra no zero
         self.progressbar = ctk.CTkProgressBar(self.main_frame, width=300)
         self.progressbar.pack(pady=10)
         self.progressbar.set(0.0) # Inicia vazia (modo determinate é o padrão)
-
-        # Guarde a referência do label para podermos atualizar a porcentagem em texto também
-        self.lbl_wait = ctk.CTkLabel(self.main_frame, text="Iniciando conversão...", text_color="gray")
-        self.lbl_wait.pack(pady=10)
     
     # --- NOVA FUNÇÃO DE CALLBACK ---
     def update_progress(self, current_frame, total_frames):
-        """Atualiza a barra de progresso com base no frame atual"""
+        """Atualiza a barra de progresso com base no frame atual (Lendo)"""
         if total_frames > 0:
             # Calcula o progresso de 0.0 a 1.0
             progress = current_frame / total_frames
             
-            # Atualiza a barra
-            self.progressbar.set(progress)
+            # Usando .after para atualizar a UI de forma segura a partir da thread
+            self.root.after(0, self._update_ui_reading, progress)
             
-            # Atualiza o texto (Ex: "Processando: 45%")
-            percentage = int(progress * 100)
-            self.lbl_wait.configure(text=f"Lendo arquivo: {percentage}%")
+    def _update_ui_reading(self, progress):
+        self.lbl_step.configure(text="Passo 1/3: Lendo Arquivo")
+        self.progressbar.set(progress)
+        
     
     def update_progress_saving(self, current_frame, total_frames):
-        """Atualiza a barra de progresso durante a fase de salvamento"""
+        """Atualiza a barra de progresso durante a fase de criação/salvamento"""
         if total_frames > 0:
             progress = current_frame / total_frames
-            self.progressbar.set(progress)
-            percentage = int(progress * 100)
-            if percentage == 100:
-                self.lbl_wait.configure(text="Salvando GIF...")
-            else:
-                self.lbl_wait.configure(text=f"Criando GIF: {percentage}%")
-
+            self.root.after(0, self._update_ui_creating, progress)
+            
+    def _update_ui_creating(self, progress):
+        self.lbl_step.configure(text="Passo 2/3: Criando GIF")
+        self.progressbar.set(progress)
+        percentage = int(progress * 100)
+        
+        if percentage == 100:
+            self.lbl_step.configure(text="Passo 3/3: Salvando no Disco")
+            
     def start_processing(self):
         self.show_screen_processing()
         # Thread para não travar a UI
@@ -190,14 +196,42 @@ class GifConverterApp:
         lbl_info = ctk.CTkLabel(self.main_frame, text="Arquivo salvo em:", font=("Roboto", 12))
         lbl_info.pack(pady=(10, 5))
         
-        # Caixa de texto para o usuário poder copiar o caminho se quiser
-        entry_out = ctk.CTkEntry(self.main_frame, justify="center")
+        # --- CONTAINER PARA A CAIXA DE TEXTO E O BOTÃO DE ABRIR ---
+        result_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        result_frame.pack(fill="x", padx=30, pady=10)
+        result_frame.grid_columnconfigure(0, weight=1) # Faz a entry expandir
+        
+        # Caixa de texto
+        entry_out = ctk.CTkEntry(result_frame, justify="left")
         entry_out.insert(0, self.output_file)
         entry_out.configure(state="readonly")
-        entry_out.pack(fill="x", padx=40, pady=10)
+        entry_out.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        
+        # Botão de Ícone para abrir a pasta
+        btn_open_folder = ctk.CTkButton(
+            result_frame, 
+            text="📁", 
+            width=40, 
+            command=self.open_output_folder,
+            fg_color="#3B8ED0",
+            hover_color="#36719F"
+        )
+        btn_open_folder.grid(row=0, column=1)
         
         btn_ok = ctk.CTkButton(self.main_frame, text="Novo Arquivo", command=self.show_screen_initial, width=150)
         btn_ok.pack(pady=30)
+
+    # --- FUNÇÃO PARA ABRIR A PASTA ---
+    def open_output_folder(self):
+        """Abre o gerenciador de arquivos na pasta onde o GIF foi salvo"""
+        folder_path = os.path.dirname(os.path.abspath(self.output_file))
+        
+        if platform.system() == "Windows":
+            os.startfile(folder_path)
+        elif platform.system() == "Darwin":  # macOS
+            subprocess.Popen(["open", folder_path])
+        else:  # Linux
+            subprocess.Popen(["xdg-open", folder_path])
 
 if __name__ == "__main__":
     app = GifConverterApp()
