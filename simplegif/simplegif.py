@@ -6,12 +6,13 @@ from cv2 import (VideoCapture,
                  CAP_PROP_FRAME_HEIGHT, 
                  CAP_PROP_FRAME_COUNT)
 
-from tqdm import tqdm
 from os import listdir
 from typing import List
 from numpy import array, uint8
 from PIL.Image import fromarray, Image
 from os.path import isfile, isdir, exists, join
+import imageio
+import numpy as np
 
 class SimpleGIF:
     '''A class to convert video files to GIF format.
@@ -77,7 +78,6 @@ class SimpleGIF:
                 print(f"Error: {save_path} already exists on {self._output_path}.", end="\n\n")
             else:
                 self._process_video(max_frames, frame_skip, progress_callback)
-                self._save_gif()
     
     def convert_folder(self, path='inputs/', 
                        output_path='outputs', 
@@ -127,13 +127,16 @@ class SimpleGIF:
         image_count = 0
         total_frames = int(self._cap.get(CAP_PROP_FRAME_COUNT))
 
+        if total_frames > max_frames:
+            total_frames = max_frames
+
         _, frame = self._cap.read()
 
         print(f'Reading {self._last_name_file} video file')
         if progress_callback:
             progress_callback(0, total_frames)
 
-        for _ in tqdm(range(min(total_frames, max_frames))):
+        for _ in range(total_frames):
             if image_count % frame_skip == 0 and frame is not None:
                 frame = resize(frame, (self._width, self._height))
                 rgb_frame = cvtColor(frame, COLOR_BGR2RGB)
@@ -146,11 +149,38 @@ class SimpleGIF:
                 
             image_count += 1
             _, frame = self._cap.read()
-            
+
             if progress_callback:
                 progress_callback(image_count, total_frames)
 
         self._cap.release()
+
+    def save_gif(self, progress_callback=None):
+        '''Save the processed frames as a GIF file iteratively to track progress.'''
+        if self._frames:
+            save_path = f"{self._output_path}/{self._save_name}.gif"
+            print(f"Saving file in {save_path}")
+            
+            total_frames = len(self._frames)
+            
+            # Abre o "escritor" de GIF do imageio
+            # duration=100 (em milissegundos, igual você usou) e loop=0 (infinito)
+            with imageio.get_writer(save_path, mode='I', duration=100, loop=0) as writer:
+                for i, frame in enumerate(self._frames):
+                    # O imageio precisa que a imagem do Pillow seja convertida para um array do numpy
+                    frame_array = np.array(frame)
+                    
+                    # Adiciona o frame ao GIF
+                    writer.append_data(frame_array)
+                    
+                    # === ATUALIZA A BARRA DE PROGRESSO ===
+                    if progress_callback:
+                        # Passa o frame atual e o total para a interface
+                        progress_callback(i + 1, total_frames)
+                        
+            print("GIF saved successfully.", end="\n\n")
+        else:
+            print("No frames to save.", end="\n\n")
     
     def _save_gif(self):
         '''Save the processed frames as a GIF file.

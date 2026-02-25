@@ -137,7 +137,15 @@ class GifConverterApp:
             
             # Atualiza o texto (Ex: "Processando: 45%")
             percentage = int(progress * 100)
-            self.lbl_wait.configure(text=f"Carregando arquivo: {percentage}%")
+            self.lbl_wait.configure(text=f"Lendo arquivo: {percentage}%")
+    
+    def update_progress_saving(self, current_frame, total_frames):
+        """Atualiza a barra de progresso durante a fase de salvamento"""
+        if total_frames > 0:
+            progress = current_frame / total_frames
+            self.progressbar.set(progress)
+            percentage = int(progress * 100)
+            self.lbl_wait.configure(text=f"Criando GIF: {percentage}%")
 
     def start_processing(self):
         self.show_screen_processing()
@@ -162,6 +170,7 @@ class GifConverterApp:
                 frame_skip=5,
                 progress_callback=self.update_progress
             )
+            self.gif_maker.save_gif(progress_callback=self.update_progress_saving)
             # Sucesso
             self.root.after(0, self.show_screen_result)
         except Exception as e:
