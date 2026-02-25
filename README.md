@@ -62,5 +62,12 @@ A Python tool to convert video files into optimized GIFs with customizable optio
     )
     ```
 
+## Compile to Executable
+To compile the project into an executable, you can use PyInstaller.
+
+```bash
+pyinstaller --onefile --windowed --copy-metadata imageio ./simplegif/app.py
+```
+
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
