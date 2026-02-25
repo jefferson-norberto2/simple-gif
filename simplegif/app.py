@@ -145,14 +145,17 @@ class GifConverterApp:
             progress = current_frame / total_frames
             self.progressbar.set(progress)
             percentage = int(progress * 100)
-            self.lbl_wait.configure(text=f"Criando GIF: {percentage}%")
+            if percentage == 100:
+                self.lbl_wait.configure(text="Salvando GIF...")
+            else:
+                self.lbl_wait.configure(text=f"Criando GIF: {percentage}%")
 
     def start_processing(self):
         self.show_screen_processing()
         # Thread para não travar a UI
-        threading.Thread(target=self.mock_conversion_logic).start()
+        threading.Thread(target=self.conversion_logic).start()
 
-    def mock_conversion_logic(self):
+    def conversion_logic(self):
         # Chama sua classe original
         # Note: Se self.output_file não tiver diretório, o os.path.dirname pode vir vazio,
         # então ajustamos para salvar na mesma pasta do script se necessário.
