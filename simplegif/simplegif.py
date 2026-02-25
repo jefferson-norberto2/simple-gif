@@ -132,6 +132,7 @@ class SimpleGIF:
         _, frame = self._cap.read()
 
         print(f'Reading {self._last_name_file} video file')
+        
         if progress_callback:
             progress_callback(0, total_frames)
 
