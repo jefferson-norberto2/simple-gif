@@ -1,13 +1,13 @@
 """Módulo de leitura e extração de quadros de vídeo usando OpenCV."""
 
+import cv2
+import numpy as np
+
 from collections.abc import Callable, Generator
 from pathlib import Path
 from types import TracebackType
 
-import cv2
-import numpy as np
-
-from simplegif import VideoMetadata
+from simplegif.utils import VideoMetadata
 
 
 class VideoReader:

@@ -6,10 +6,7 @@ from PIL import Image
 from pathlib import Path
 from collections.abc import Callable
 
-from simplegif.config import ConversionOptions
-from simplegif.processor import FrameProcessor
-from simplegif.reader import VideoReader
-from simplegif.writer import GifWriter
+from simplegif.utils import ConversionOptions, FrameProcessor, VideoReader, GifWriter
 
          
 class SimpleGIF:

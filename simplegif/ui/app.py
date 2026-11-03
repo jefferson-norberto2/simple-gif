@@ -31,7 +31,7 @@ def load_stylesheet(qss_name: str = "style.qss") -> str:
     """Carrega as folhas de estilo QSS a partir de arquivo externo (compatível com PyInstaller)."""
     if hasattr(sys, "_MEIPASS"):
         base_dir = Path(sys._MEIPASS)
-        qss_file = base_dir / "simplegif" / qss_name
+        qss_file = base_dir / "simplegif/ui" / qss_name
         if not qss_file.is_file():
             qss_file = base_dir / qss_name
     else:
