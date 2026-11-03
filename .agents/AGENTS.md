@@ -10,7 +10,7 @@ Este projeto tem como meta central ser uma ferramenta **100% offline, segura, le
 
 | Agente | Arquivo de Definição | Função Principal |
 | :--- | :--- | :--- |
-| **Feature Agent** | [`.agents/subagents/feature.md`](file:///C:/Users/jmn/Documents/dev/python/simple-gif/.agents/subagents/feature.md) | Implementa funcionalidades no motor de vídeo, interface gráfica CustomTkinter e CLI. |
+| **Feature Agent** | [`.agents/subagents/feature.md`](file:///C:/Users/jmn/Documents/dev/python/simple-gif/.agents/subagents/feature.md) | Implementa funcionalidades no motor de vídeo, interface gráfica PySide6 e CLI. |
 | **Test Agent** | [`.agents/subagents/test.md`](file:///C:/Users/jmn/Documents/dev/python/simple-gif/.agents/subagents/test.md) | Cria e executa testes com `pytest` usando fixtures de vídeo sintético e validação de regressão. |
 | **QA Agent** | [`.agents/subagents/qa.md`](file:///C:/Users/jmn/Documents/dev/python/simple-gif/.agents/subagents/qa.md) | Audita conformidade com PEP 8, busca código morto, detecta bibliotecas não utilizadas e valida a postura offline. |
 

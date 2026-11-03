@@ -1,293 +1,488 @@
-"""Interface gráfica CustomTkinter para o conversor SimpleGIF."""
+"""Interface gráfica para conversão de vídeos em GIF utilizando PySide6 (Qt)."""
 
-import os
 from pathlib import Path
-import platform
-import subprocess
-import threading
-from tkinter import filedialog
+import sys
 
-import customtkinter as ctk
+from PySide6.QtCore import Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-try:
-    from simplegif.simplegif import SimpleGIF
-except ImportError:
-    from simplegif import SimpleGIF  # type: ignore[no-redef]
+from simplegif import SimpleGIF
 
 
-class GifConverterApp:
-    """Aplicação CustomTkinter para converter vídeos em GIFs com interface amigável."""
+def load_stylesheet(qss_name: str = "style.qss") -> str:
+    """Carrega as folhas de estilo QSS a partir de arquivo externo (compatível com PyInstaller)."""
+    if hasattr(sys, "_MEIPASS"):
+        base_dir = Path(sys._MEIPASS)
+        qss_file = base_dir / "simplegif" / qss_name
+        if not qss_file.is_file():
+            qss_file = base_dir / qss_name
+    else:
+        qss_file = Path(__file__).resolve().parent / qss_name
+
+    if qss_file.is_file():
+        return qss_file.read_text(encoding="utf-8")
+    return ""
+
+
+class ConversionWorker(QThread):
+    """Worker que executa a conversão do vídeo para GIF em segundo plano via QThread."""
+
+    progress_updated = Signal(int, int)
+    conversion_completed = Signal(Path)
+    conversion_failed = Signal(str, bool)  # (mensagem_erro, eh_file_exists)
+
+    def __init__(
+        self,
+        gif_maker: SimpleGIF,
+        input_path: Path,
+        output_path: Path,
+        scale: float,
+        frame_skip: int,
+        less_colors: bool,
+        overwrite: bool,
+    ) -> None:
+        super().__init__()
+        self.gif_maker = gif_maker
+        self.input_path = input_path
+        self.output_path = output_path
+        self.scale = scale
+        self.frame_skip = frame_skip
+        self.less_colors = less_colors
+        self.overwrite = overwrite
+
+    def run(self) -> None:
+        """Executa a conversão com callbacks reportados por Signals."""
+        try:
+            result_path = self.gif_maker.convert_file(
+                path=self.input_path,
+                output_path=self.output_path,
+                scale=self.scale,
+                less_colors=self.less_colors,
+                max_frames=3000,
+                frame_skip=self.frame_skip,
+                overwrite=self.overwrite,
+                progress_callback=self._on_progress,
+            )
+            self.conversion_completed.emit(result_path)
+        except FileExistsError as e:
+            self.conversion_failed.emit(str(e), True)
+        except Exception as e:
+            self.conversion_failed.emit(str(e), False)
+
+    def _on_progress(self, current: int, total: int) -> None:
+        self.progress_updated.emit(current, total)
+
+
+class GifConverterApp(QMainWindow):
+    """Janela principal da aplicação Simple GIF Maker desenvolvida com PySide6."""
 
     def __init__(self) -> None:
-        ctk.set_appearance_mode("Dark")
-        ctk.set_default_color_theme("blue")
-
-        self.root = ctk.CTk()
-        self.root.title("Video to GIF")
-        self.root.geometry("500x350")
-        self.root.resizable(False, False)
-
-        # Variáveis de estado
-        self.selected_file: Path | None = None
-        self.output_file: Path | None = None
+        super().__init__()
+        self.setWindowTitle("Simple GIF Maker")
+        self.setFixedSize(580, 500)
+        self.setStyleSheet(load_stylesheet())
 
         self.gif_maker = SimpleGIF()
+        self.selected_file: Path | None = None
+        self.output_dir: Path | None = None
+        self.result_gif_path: Path | None = None
+        self.worker: ConversionWorker | None = None
 
-        # Container principal
-        self.main_frame = ctk.CTkFrame(self.root, corner_radius=15)
-        self.main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+        self.stacked_widget = QStackedWidget(self)
+        self.setCentralWidget(self.stacked_widget)
 
-        self.error_message: str = ""
-        self.is_file_exists_error: bool = False
+        self.screen_initial = self._create_screen_initial()
+        self.screen_options = self._create_screen_options()
+        self.screen_processing = self._create_screen_processing()
+        self.screen_result = self._create_screen_result()
 
-        # Inicia na primeira tela
+        self.stacked_widget.addWidget(self.screen_initial)     # Index 0
+        self.stacked_widget.addWidget(self.screen_options)     # Index 1
+        self.stacked_widget.addWidget(self.screen_processing)  # Index 2
+        self.stacked_widget.addWidget(self.screen_result)      # Index 3
+
         self.show_screen_initial()
 
-        self.root.mainloop()
+    # --- TELA 1: Seleção Inicial ---
+    def _create_screen_initial(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(35, 40, 35, 40)
+        layout.setSpacing(15)
 
-    def clear_frame(self) -> None:
-        """Limpa os widgets do frame principal."""
-        for widget in self.main_frame.winfo_children():
-            widget.destroy()
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(30, 40, 30, 40)
+        card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.setSpacing(18)
 
-    # --- TELA 1: Inicial ---
-    def show_screen_initial(self) -> None:
-        """Exibe a tela inicial para seleção do arquivo de vídeo."""
-        self.clear_frame()
+        lbl_icon = QLabel("🎬")
+        lbl_icon.setStyleSheet("font-size: 54px;")
+        lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.main_frame.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_rowconfigure(0, weight=1)
-        self.main_frame.grid_rowconfigure(3, weight=1)
+        lbl_title = QLabel("Simple GIF Maker")
+        lbl_title.setObjectName("titleLabel")
+        lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        lbl_title = ctk.CTkLabel(self.main_frame, text="Conversor de GIF", font=("Roboto Medium", 24))
-        lbl_title.grid(row=1, column=0, pady=(0, 20))
+        lbl_sub = QLabel("Conversor de vídeo para GIF 100% offline, rápido e seguro.")
+        lbl_sub.setObjectName("subtitleLabel")
+        lbl_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        btn_file = ctk.CTkButton(
-            self.main_frame,
-            text="Escolher Arquivo de Vídeo",
-            command=self.select_file,
-            width=200,
-            height=50,
-            font=("Roboto", 14),
-            corner_radius=25,
-        )
-        btn_file.grid(row=2, column=0)
+        btn_select = QPushButton(" Escolher Arquivo de Vídeo")
+        btn_select.setObjectName("primaryButton")
+        btn_select.setFixedHeight(48)
+        btn_select.setFixedWidth(240)
+        btn_select.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_select.clicked.connect(self.select_file)
+
+        lbl_formats = QLabel("Formatos suportados: MP4, AVI, MOV, MKV")
+        lbl_formats.setObjectName("subtitleLabel")
+        lbl_formats.setStyleSheet("font-size: 11px; color: #71717a;")
+        lbl_formats.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        card_layout.addWidget(lbl_icon)
+        card_layout.addWidget(lbl_title)
+        card_layout.addWidget(lbl_sub)
+        card_layout.addSpacing(10)
+        card_layout.addWidget(btn_select, alignment=Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(lbl_formats)
+
+        layout.addWidget(card)
+        return widget
 
     def select_file(self) -> None:
-        """Abre caixa de diálogo para seleção do vídeo e define caminhos com pathlib.Path."""
-        filename = filedialog.askopenfilename(
-            title="Selecione o Vídeo",
-            filetypes=[("Arquivos de Vídeo", "*.mp4 *.avi *.mov *.mkv")],
+        """Abre o diálogo nativo do SO para escolher o arquivo de vídeo."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecione o Vídeo",
+            "",
+            "Arquivos de Vídeo (*.mp4 *.avi *.mov *.mkv);;Todos os Arquivos (*.*)",
         )
-        if filename:
-            self.selected_file = Path(filename).resolve()
-            self.output_file = self.selected_file.with_suffix(".gif")
-            self.show_screen_confirm()
+        if file_path:
+            self.selected_file = Path(file_path).resolve()
+            self.output_dir = self.selected_file.parent
+            self.update_options_screen()
+            self.stacked_widget.setCurrentIndex(1)
 
-    # --- TELA 2: Confirmação ---
-    def show_screen_confirm(self) -> None:
-        """Exibe os dados do arquivo selecionado e botões de ação."""
-        self.clear_frame()
-        self.main_frame.grid_columnconfigure(0, weight=1)
+    # --- TELA 2: Configuração e Confirmação ---
+    def _create_screen_options(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(30, 25, 30, 25)
+        layout.setSpacing(15)
 
-        lbl_info = ctk.CTkLabel(self.main_frame, text="Arquivo Selecionado:", font=("Roboto", 14), anchor="w")
-        lbl_info.pack(fill="x", padx=20, pady=(30, 5))
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(25, 20, 25, 20)
+        card_layout.setSpacing(14)
 
-        entry_path = ctk.CTkEntry(self.main_frame, placeholder_text=str(self.selected_file))
-        entry_path.insert(0, str(self.selected_file))
-        entry_path.configure(state="disabled")
-        entry_path.pack(fill="x", padx=20, pady=(0, 30))
+        lbl_title = QLabel("Configurar Conversão")
+        lbl_title.setObjectName("sectionTitle")
+        card_layout.addWidget(lbl_title)
 
-        btn_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20)
+        # Vídeo de entrada
+        card_layout.addWidget(QLabel("Vídeo Selecionado:"))
+        self.entry_input_path = QLineEdit()
+        self.entry_input_path.setReadOnly(True)
+        card_layout.addWidget(self.entry_input_path)
 
-        btn_cancel = ctk.CTkButton(
-            btn_frame,
-            text="Cancelar",
-            fg_color="transparent",
-            border_width=2,
-            text_color=("gray10", "#DCE4EE"),
-            command=self.show_screen_initial,
+        # Pasta de saída
+        card_layout.addWidget(QLabel("Salvar na Pasta:"))
+        out_row = QHBoxLayout()
+        self.entry_output_dir = QLineEdit()
+        self.entry_output_dir.setReadOnly(True)
+        btn_browse_out = QPushButton("Alterar...")
+        btn_browse_out.clicked.connect(self.browse_output_dir)
+        out_row.addWidget(self.entry_output_dir)
+        out_row.addWidget(btn_browse_out)
+        card_layout.addLayout(out_row)
+
+        # Grade de Opções
+        grid = QGridLayout()
+        grid.setSpacing(12)
+
+        grid.addWidget(QLabel("Escala de Tamanho:"), 0, 0)
+        self.combo_scale = QComboBox()
+        self.combo_scale.addItems(["100% (Original)", "75%", "60% (Recomendado)", "50%", "35%", "25%"])
+        self.combo_scale.setCurrentIndex(2)  # 60%
+        grid.addWidget(self.combo_scale, 0, 1)
+
+        grid.addWidget(QLabel("Intervalo de Quadros (Skip):"), 1, 0)
+        self.spin_frame_skip = QSpinBox()
+        self.spin_frame_skip.setRange(1, 30)
+        self.spin_frame_skip.setValue(5)
+        self.spin_frame_skip.setSuffix(" quadros")
+        grid.addWidget(self.spin_frame_skip, 1, 1)
+
+        card_layout.addLayout(grid)
+
+        # Checkboxes
+        self.chk_less_colors = QCheckBox("Reduzir paleta de cores (Gera arquivos menores)")
+        self.chk_less_colors.setChecked(True)
+        card_layout.addWidget(self.chk_less_colors)
+
+        self.chk_overwrite = QCheckBox("Sobrescrever arquivo se já existir")
+        self.chk_overwrite.setChecked(False)
+        card_layout.addWidget(self.chk_overwrite)
+
+        layout.addWidget(card)
+
+        # Botões de Ação
+        btn_box = QHBoxLayout()
+        btn_cancel = QPushButton("Voltar")
+        btn_cancel.setObjectName("secondaryButton")
+        btn_cancel.setFixedHeight(40)
+        btn_cancel.clicked.connect(self.show_screen_initial)
+
+        btn_start = QPushButton("🚀 Iniciar Conversão")
+        btn_start.setObjectName("primaryButton")
+        btn_start.setFixedHeight(40)
+        btn_start.clicked.connect(self.start_conversion)
+
+        btn_box.addWidget(btn_cancel)
+        btn_box.addWidget(btn_start)
+        layout.addLayout(btn_box)
+
+        return widget
+
+    def update_options_screen(self) -> None:
+        """Atualiza os campos da tela de opções com base no arquivo selecionado."""
+        if self.selected_file:
+            self.entry_input_path.setText(str(self.selected_file))
+        if self.output_dir:
+            self.entry_output_dir.setText(str(self.output_dir))
+
+    def browse_output_dir(self) -> None:
+        """Permite ao usuário escolher outra pasta de destino."""
+        selected_dir = QFileDialog.getExistingDirectory(
+            self,
+            "Selecione a Pasta de Destino",
+            str(self.output_dir or Path.home()),
         )
-        btn_cancel.pack(side="left", expand=True, fill="x", padx=(0, 10))
+        if selected_dir:
+            self.output_dir = Path(selected_dir).resolve()
+            self.entry_output_dir.setText(str(self.output_dir))
 
-        btn_create = ctk.CTkButton(
-            btn_frame,
-            text="Criar GIF",
-            fg_color="#2CC985",
-            hover_color="#229A66",
-            text_color="white",
-            command=self.start_processing,
-        )
-        btn_create.pack(side="right", expand=True, fill="x", padx=(10, 0))
+    # --- TELA 3: Processamento ---
+    def _create_screen_processing(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(35, 40, 35, 40)
 
-    # --- TELA 3: Processando ---
-    def show_screen_processing(self) -> None:
-        """Exibe a tela de processamento com barra de progresso."""
-        self.clear_frame()
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(30, 40, 30, 40)
+        card_layout.setSpacing(20)
+        card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        lbl_process = ctk.CTkLabel(self.main_frame, text="Processando seu GIF...", font=("Roboto Medium", 18))
-        lbl_process.pack(pady=(40, 20))
+        lbl_title = QLabel("Processando seu GIF...")
+        lbl_title.setObjectName("titleLabel")
+        lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.lbl_step = ctk.CTkLabel(
-            self.main_frame,
-            text="Iniciando conversão...",
-            font=("Roboto", 12),
-            text_color="#2CC985",
-        )
-        self.lbl_step.pack(pady=(0, 5))
+        self.lbl_progress_status = QLabel("Iniciando captura do vídeo...")
+        self.lbl_progress_status.setObjectName("subtitleLabel")
+        self.lbl_progress_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.progressbar = ctk.CTkProgressBar(self.main_frame, width=300)
-        self.progressbar.pack(pady=10)
-        self.progressbar.set(0.0)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFixedWidth(420)
 
-    def update_progress(self, current_frame: int, total_frames: int) -> None:
-        """Atualiza o estado de progresso de forma thread-safe na UI."""
-        if total_frames > 0:
-            progress = min(1.0, current_frame / total_frames)
-            self.root.after(0, self._update_ui_progress, progress, current_frame, total_frames)
+        lbl_info = QLabel("Gravando em streaming contínuo diretamente no disco.")
+        lbl_info.setStyleSheet("font-size: 11px; color: #71717a;")
+        lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-    def _update_ui_progress(self, progress: float, current_frame: int, total_frames: int) -> None:
-        percentage = int(progress * 100)
-        if percentage >= 100:
-            self.lbl_step.configure(text="Finalizando gravação do GIF no disco...")
-        else:
-            self.lbl_step.configure(text=f"Processando frames: {current_frame}/{total_frames} ({percentage}%)")
-        self.progressbar.set(progress)
+        card_layout.addWidget(lbl_title)
+        card_layout.addWidget(self.lbl_progress_status)
+        card_layout.addWidget(self.progress_bar, alignment=Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(lbl_info)
 
-    def update_progress_saving(self, current_frame: int, total_frames: int) -> None:
-        """Compatibilidade para atualizações de progresso."""
-        self.update_progress(current_frame, total_frames)
+        layout.addWidget(card)
+        return widget
 
-    def start_processing(self) -> None:
-        """Inicia a thread em segundo plano para conversão assíncrona."""
-        self.show_screen_processing()
-        threading.Thread(target=self.conversion_logic, daemon=True).start()
-
-    def conversion_logic(self) -> None:
-        """Executa a conversão via streaming e trata exceções semanticamente."""
-        if self.selected_file is None:
-            self.error_message = "Nenhum arquivo de vídeo foi selecionado."
-            self.is_file_exists_error = False
-            self.root.after(0, self.show_screen_result, True)
+    def start_conversion(self) -> None:
+        """Coleta as opções e dispara o QThread de processamento."""
+        if not self.selected_file or not self.output_dir:
             return
 
-        output_dir = self.output_file.parent if self.output_file else self.selected_file.parent
+        scale_map = {
+            "100% (Original)": 1.0,
+            "75%": 0.75,
+            "60% (Recomendado)": 0.6,
+            "50%": 0.5,
+            "35%": 0.35,
+            "25%": 0.25,
+        }
+        chosen_scale = scale_map.get(self.combo_scale.currentText(), 0.6)
+        frame_skip = self.spin_frame_skip.value()
+        less_colors = self.chk_less_colors.isChecked()
+        overwrite = self.chk_overwrite.isChecked()
 
-        try:
-            generated_path = self.gif_maker.convert_file(
-                path=self.selected_file,
-                output_path=output_dir,
-                scale=0.6,
-                less_colors=True,
-                max_frames=2000,
-                frame_skip=5,
-                progress_callback=self.update_progress,
-            )
-            self.output_file = generated_path
-            self.root.after(0, self.show_screen_result, False)
-        except FileExistsError as e:
-            self.error_message = str(e)
-            self.is_file_exists_error = True
-            self.root.after(0, self.show_screen_result, True)
-        except FileNotFoundError as e:
-            self.error_message = str(e)
-            self.is_file_exists_error = False
-            self.root.after(0, self.show_screen_result, True)
-        except Exception as e:
-            self.error_message = f"Erro inesperado: {e}"
-            self.is_file_exists_error = False
-            self.root.after(0, self.show_screen_result, True)
+        self.progress_bar.setValue(0)
+        self.lbl_progress_status.setText("Lendo arquivo de vídeo...")
+        self.stacked_widget.setCurrentIndex(2)
+
+        self.worker = ConversionWorker(
+            gif_maker=self.gif_maker,
+            input_path=self.selected_file,
+            output_path=self.output_dir,
+            scale=chosen_scale,
+            frame_skip=frame_skip,
+            less_colors=less_colors,
+            overwrite=overwrite,
+        )
+        self.worker.progress_updated.connect(self.on_progress_update)
+        self.worker.conversion_completed.connect(self.on_conversion_completed)
+        self.worker.conversion_failed.connect(self.on_conversion_failed)
+        self.worker.start()
+
+    def on_progress_update(self, current: int, total: int) -> None:
+        """Slot para atualização thread-safe da barra de progresso."""
+        if total > 0:
+            percentage = int((current / total) * 100)
+            self.progress_bar.setValue(percentage)
+            self.lbl_progress_status.setText(f"Processando frames: {current}/{total} ({percentage}%)")
+
+    def on_conversion_completed(self, gif_path: Path) -> None:
+        """Slot acionado quando a conversão for concluída com sucesso."""
+        self.result_gif_path = gif_path
+        self.show_screen_result(success=True)
+
+    def on_conversion_failed(self, error_message: str, is_file_exists: bool) -> None:
+        """Slot acionado em caso de erro na conversão."""
+        self.result_gif_path = None
+        self.show_screen_result(success=False, error_msg=error_message, is_file_exists=is_file_exists)
 
     # --- TELA 4: Resultado ---
-    def show_screen_result(self, have_error: bool = False) -> None:
-        """Exibe o resultado da conversão com opção de abrir pasta ou mensagem de erro."""
-        self.clear_frame()
+    def _create_screen_result(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(35, 30, 35, 30)
 
-        if have_error:
-            lbl_title = ctk.CTkLabel(
-                self.main_frame,
-                text="Erro durante a conversão!",
-                font=("Roboto Medium", 20),
-                text_color="#FF4C4C",
-            )
-            lbl_title.pack(pady=(30, 10))
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        self.card_result_layout = QVBoxLayout(card)
+        self.card_result_layout.setContentsMargins(30, 30, 30, 30)
+        self.card_result_layout.setSpacing(16)
+        self.card_result_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            lbl_info = ctk.CTkLabel(
-                self.main_frame,
-                text=self.error_message,
-                font=("Roboto", 12),
-                wraplength=420,
-            )
-            lbl_info.pack(pady=(5, 10))
+        self.lbl_res_icon = QLabel("✅")
+        self.lbl_res_icon.setStyleSheet("font-size: 46px;")
+        self.lbl_res_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-            if self.is_file_exists_error:
-                btn_open_folder = ctk.CTkButton(
-                    self.main_frame,
-                    text="📁 Abrir Pasta de Destino",
-                    command=self.open_output_folder,
-                    fg_color="#3B8ED0",
-                    hover_color="#36719F",
-                )
-                btn_open_folder.pack(pady=10)
+        self.lbl_res_title = QLabel("Concluído!")
+        self.lbl_res_title.setObjectName("titleLabel")
+        self.lbl_res_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.lbl_res_desc = QLabel("Arquivo salvo em:")
+        self.lbl_res_desc.setObjectName("subtitleLabel")
+        self.lbl_res_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Container do caminho de saída
+        self.path_box = QHBoxLayout()
+        self.entry_res_path = QLineEdit()
+        self.entry_res_path.setReadOnly(True)
+        btn_copy = QPushButton("Copiar")
+        btn_copy.clicked.connect(self.copy_path_to_clipboard)
+        self.path_box.addWidget(self.entry_res_path)
+        self.path_box.addWidget(btn_copy)
+
+        self.btn_open_folder = QPushButton("📁 Abrir Pasta de Destino")
+        self.btn_open_folder.clicked.connect(self.open_destination_folder)
+        self.btn_open_folder.setFixedHeight(38)
+
+        self.btn_new_file = QPushButton("Converter Novo Vídeo")
+        self.btn_new_file.setObjectName("primaryButton")
+        self.btn_new_file.setFixedHeight(42)
+        self.btn_new_file.setFixedWidth(200)
+        self.btn_new_file.clicked.connect(self.show_screen_initial)
+
+        self.card_result_layout.addWidget(self.lbl_res_icon)
+        self.card_result_layout.addWidget(self.lbl_res_title)
+        self.card_result_layout.addWidget(self.lbl_res_desc)
+        self.card_result_layout.addLayout(self.path_box)
+        self.card_result_layout.addWidget(self.btn_open_folder, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.card_result_layout.addSpacing(10)
+        self.card_result_layout.addWidget(self.btn_new_file, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        layout.addWidget(card)
+        return widget
+
+    def show_screen_result(
+        self,
+        success: bool,
+        error_msg: str = "",
+        is_file_exists: bool = False,
+    ) -> None:
+        """Configura e exibe a tela de resultado dependendo do status de sucesso ou erro."""
+        if success:
+            self.lbl_res_icon.setText("✅")
+            self.lbl_res_title.setText("GIF Gerado com Sucesso!")
+            self.lbl_res_title.setStyleSheet("color: #10b981; font-size: 20px; font-weight: bold;")
+            self.lbl_res_desc.setText("Arquivo disponível em:")
+            self.entry_res_path.setVisible(True)
+            self.entry_res_path.setText(str(self.result_gif_path))
+            self.btn_open_folder.setVisible(True)
         else:
-            lbl_success = ctk.CTkLabel(
-                self.main_frame,
-                text="Concluído!",
-                font=("Roboto Medium", 22),
-                text_color="#2CC985",
-            )
-            lbl_success.pack(pady=(40, 10))
+            self.lbl_res_icon.setText("❌")
+            self.lbl_res_title.setText("Falha na Conversão")
+            self.lbl_res_title.setStyleSheet("color: #ef4444; font-size: 20px; font-weight: bold;")
+            self.lbl_res_desc.setText(error_msg)
+            self.entry_res_path.setVisible(False)
+            self.btn_open_folder.setVisible(is_file_exists)
 
-            lbl_info = ctk.CTkLabel(self.main_frame, text="Arquivo salvo em:", font=("Roboto", 12))
-            lbl_info.pack(pady=(10, 5))
+        self.stacked_widget.setCurrentIndex(3)
 
-            result_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-            result_frame.pack(fill="x", padx=30, pady=10)
-            result_frame.grid_columnconfigure(0, weight=1)
+    def copy_path_to_clipboard(self) -> None:
+        """Copia o caminho do GIF gerado para a área de transferência."""
+        if self.result_gif_path:
+            clipboard = QGuiApplication.clipboard()
+            clipboard.setText(str(self.result_gif_path))
 
-            entry_out = ctk.CTkEntry(result_frame, justify="left")
-            entry_out.insert(0, str(self.output_file) if self.output_file else "")
-            entry_out.configure(state="readonly")
-            entry_out.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+    def open_destination_folder(self) -> None:
+        """Abre a pasta de destino de forma segura e nativa usando QDesktopServices."""
+        target_dir = self.output_dir
+        if self.result_gif_path and self.result_gif_path.parent.is_dir():
+            target_dir = self.result_gif_path.parent
 
-            btn_open_folder = ctk.CTkButton(
-                result_frame,
-                text="📁",
-                width=40,
-                command=self.open_output_folder,
-                fg_color="#3B8ED0",
-                hover_color="#36719F",
-            )
-            btn_open_folder.grid(row=0, column=1)
+        if target_dir and target_dir.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(target_dir)))
 
-        btn_ok = ctk.CTkButton(
-            self.main_frame,
-            text="Novo Arquivo",
-            command=self.show_screen_initial,
-            width=150,
-        )
-        btn_ok.pack(pady=25)
+    def show_screen_initial(self) -> None:
+        """Retorna para a tela inicial de seleção."""
+        self.selected_file = None
+        self.result_gif_path = None
+        self.stacked_widget.setCurrentIndex(0)
 
-    def open_output_folder(self) -> None:
-        """Abre o gerenciador de arquivos na pasta de destino de forma segura."""
-        if not self.output_file:
-            return
 
-        target_path = Path(self.output_file).resolve()
-        folder_path = target_path if target_path.is_dir() else target_path.parent
-
-        if not folder_path.is_dir():
-            return
-
-        current_os = platform.system()
-        if current_os == "Windows":
-            os.startfile(folder_path)
-        elif current_os == "Darwin":  # macOS
-            subprocess.Popen(["open", str(folder_path)])
-        else:  # Linux / POSIX
-            subprocess.Popen(["xdg-open", str(folder_path)])
+def main() -> None:
+    """Função de entrada para inicialização da interface gráfica PySide6."""
+    app = QApplication(sys.argv)
+    window = GifConverterApp()
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
-    app = GifConverterApp()
+    main()
