@@ -1,21 +1,21 @@
-"""Módulo central para conversão de vídeos em GIFs animados usando OpenCV e ImageIO."""
+"""Módulo central para conversão de vídeos em GIFs animados usando OpenCV e Pillow."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from pathlib import Path
 
 import cv2
-import imageio
 import numpy as np
+from PIL import Image
 
 
 class SimpleGIF:
     """Classe para conversão de arquivos de vídeo em formato GIF de forma eficiente e offline.
 
-    Utiliza OpenCV para leitura em streaming e ImageIO para gravação progressiva quadro a quadro,
-    garantindo baixo consumo de memória RAM O(1).
+    Utiliza OpenCV para leitura e pré-processamento de quadros e Pillow para codificação progressiva,
+    fornecendo callbacks de progresso independentes tanto para a leitura quanto para o salvamento em disco.
 
     Methods:
-        - convert_file: Converte um único arquivo de vídeo para GIF via streaming.
+        - convert_file: Converte um único arquivo de vídeo para GIF com controle de etapas.
         - convert_folder: Converte todos os arquivos de vídeo de uma pasta para GIF.
         - less_colors: Reduz a profundidade de cor de um frame.
     """
@@ -36,8 +36,10 @@ class SimpleGIF:
         frame_skip: int = 5,
         overwrite: bool = False,
         progress_callback: Callable[[int, int], None] | None = None,
+        read_progress_callback: Callable[[int, int], None] | None = None,
+        save_progress_callback: Callable[[int, int], None] | None = None,
     ) -> Path:
-        """Converte um arquivo de vídeo para o formato GIF utilizando streaming de quadros.
+        """Converte um arquivo de vídeo para o formato GIF fornecendo progresso em 2 etapas.
 
         Args:
             path: Caminho do arquivo de vídeo de entrada.
@@ -47,7 +49,9 @@ class SimpleGIF:
             max_frames: Número máximo de quadros a processar (deve ser >= 1).
             frame_skip: Intervalo de captura de quadros (deve ser >= 1).
             overwrite: Se True, permite sobrescrever o arquivo de saída se já existir.
-            progress_callback: Função opcional chamada a cada frame processado (atual, total).
+            progress_callback: Função unificada de progresso chamada durante o processo (atual, total).
+            read_progress_callback: Callback específico da etapa 1: Leitura do vídeo (atual, total).
+            save_progress_callback: Callback específico da etapa 2: Gravação em disco (atual, total).
 
         Returns:
             Path: Caminho do arquivo GIF gerado no disco.
@@ -103,41 +107,78 @@ class SimpleGIF:
             target_h = max(1, int(orig_h * scale))
 
             effective_fps = max(1.0, orig_fps / frame_skip)
-            duration_per_frame = 1.0 / effective_fps
+            duration_per_frame_ms = max(20, int(round((1.0 / effective_fps) * 1000)))
 
-            if progress_callback:
-                progress_callback(0, target_frames)
+            # --- ETAPA 1: Leitura e Redimensionamento dos Quadros ---
+            if read_progress_callback:
+                read_progress_callback(0, target_frames)
+            elif progress_callback:
+                progress_callback(0, 100)
 
+            frames: list[Image.Image] = []
             frame_idx = 0
-            written_frames = 0
 
-            with imageio.get_writer(dest_file, mode="I", duration=duration_per_frame, loop=0) as writer:
-                while frame_idx < target_frames:
-                    ret, frame = cap.read()
-                    if not ret or frame is None:
-                        break
+            while frame_idx < target_frames:
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    break
 
-                    if frame_idx % frame_skip == 0:
-                        resized = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
-                        rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+                if frame_idx % frame_skip == 0:
+                    resized = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                    rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
 
-                        if less_colors:
-                            rgb_frame = self.less_colors(rgb_frame)
+                    if less_colors:
+                        rgb_frame = self.less_colors(rgb_frame)
 
-                        writer.append_data(rgb_frame)
-                        written_frames += 1
+                    pil_img = Image.fromarray(rgb_frame)
+                    frames.append(pil_img)
 
-                    frame_idx += 1
-                    if progress_callback:
-                        progress_callback(frame_idx, target_frames)
+                frame_idx += 1
+                if read_progress_callback:
+                    read_progress_callback(frame_idx, target_frames)
+                elif progress_callback:
+                    pct = int((frame_idx / target_frames) * 50)
+                    progress_callback(pct, 100)
 
-            if written_frames == 0:
-                if dest_file.exists():
-                    dest_file.unlink(missing_ok=True)
+            if not frames:
                 raise RuntimeError(f"Nenhum frame válido pôde ser lido do vídeo: {input_path}")
 
-            if progress_callback:
-                progress_callback(target_frames, target_frames)
+            if read_progress_callback:
+                read_progress_callback(target_frames, target_frames)
+
+            # --- ETAPA 2: Codificação e Gravação do GIF com Monitoramento Frame-a-Frame ---
+            total_to_save = len(frames)
+            first_frame = frames[0]
+            rest_frames = frames[1:]
+
+            def save_monitor_generator() -> Generator[Image.Image, None, None]:
+                for idx, im in enumerate(rest_frames):
+                    curr = idx + 2
+                    if save_progress_callback:
+                        save_progress_callback(curr, total_to_save)
+                    elif progress_callback:
+                        pct = 50 + int((curr / total_to_save) * 50)
+                        progress_callback(pct, 100)
+                    yield im
+
+            if save_progress_callback:
+                save_progress_callback(1, total_to_save)
+            elif progress_callback:
+                progress_callback(50, 100)
+
+            first_frame.save(
+                dest_file,
+                save_all=True,
+                append_images=save_monitor_generator(),
+                duration=duration_per_frame_ms,
+                loop=0,
+                optimize=False,
+            )
+
+            if save_progress_callback:
+                save_progress_callback(total_to_save, total_to_save)
+            elif progress_callback:
+                progress_callback(100, 100)
 
             return dest_file
         finally:
@@ -197,10 +238,7 @@ class SimpleGIF:
         return converted_files
 
     def save_gif(self, progress_callback: Callable[[int, int], None] | None = None) -> int:
-        """Método mantido para retrocompatibilidade.
-
-        A conversão e gravação agora ocorrem em fluxo contínuo (streaming) dentro de convert_file.
-        """
+        """Método mantido para retrocompatibilidade."""
         return 0
 
     def less_colors(self, image: np.ndarray) -> np.ndarray:

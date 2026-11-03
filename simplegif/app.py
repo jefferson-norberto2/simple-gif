@@ -45,9 +45,10 @@ def load_stylesheet(qss_name: str = "style.qss") -> str:
 class ConversionWorker(QThread):
     """Worker que executa a conversão do vídeo para GIF em segundo plano via QThread."""
 
-    progress_updated = Signal(int, int)
+    read_progress_updated = Signal(int, int)  # (atual, total)
+    save_progress_updated = Signal(int, int)  # (atual, total)
     conversion_completed = Signal(Path)
-    conversion_failed = Signal(str, bool)  # (mensagem_erro, eh_file_exists)
+    conversion_failed = Signal(str, bool)     # (mensagem_erro, eh_file_exists)
 
     def __init__(
         self,
@@ -79,7 +80,8 @@ class ConversionWorker(QThread):
                 max_frames=3000,
                 frame_skip=self.frame_skip,
                 overwrite=self.overwrite,
-                progress_callback=self._on_progress,
+                read_progress_callback=self._on_read_progress,
+                save_progress_callback=self._on_save_progress,
             )
             self.conversion_completed.emit(result_path)
         except FileExistsError as e:
@@ -87,8 +89,11 @@ class ConversionWorker(QThread):
         except Exception as e:
             self.conversion_failed.emit(str(e), False)
 
-    def _on_progress(self, current: int, total: int) -> None:
-        self.progress_updated.emit(current, total)
+    def _on_read_progress(self, current: int, total: int) -> None:
+        self.read_progress_updated.emit(current, total)
+
+    def _on_save_progress(self, current: int, total: int) -> None:
+        self.save_progress_updated.emit(current, total)
 
 
 class GifConverterApp(QMainWindow):
@@ -97,7 +102,7 @@ class GifConverterApp(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Simple GIF Maker")
-        self.setFixedSize(580, 500)
+        self.setFixedSize(580, 530)
         self.setStyleSheet(load_stylesheet())
 
         self.gif_maker = SimpleGIF()
@@ -187,14 +192,14 @@ class GifConverterApp(QMainWindow):
     def _create_screen_options(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(15)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(14)
 
         card = QFrame()
         card.setObjectName("cardFrame")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(25, 20, 25, 20)
-        card_layout.setSpacing(14)
+        card_layout.setContentsMargins(25, 18, 25, 18)
+        card_layout.setSpacing(13)
 
         lbl_title = QLabel("Configurar Conversão")
         lbl_title.setObjectName("sectionTitle")
@@ -283,40 +288,52 @@ class GifConverterApp(QMainWindow):
             self.output_dir = Path(selected_dir).resolve()
             self.entry_output_dir.setText(str(self.output_dir))
 
-    # --- TELA 3: Processamento ---
+    # --- TELA 3: Processamento com Duas Barras de Progresso ---
     def _create_screen_processing(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(35, 40, 35, 40)
+        layout.setContentsMargins(35, 30, 35, 30)
 
         card = QFrame()
         card.setObjectName("cardFrame")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(30, 40, 30, 40)
-        card_layout.setSpacing(20)
-        card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.setContentsMargins(30, 25, 30, 25)
+        card_layout.setSpacing(14)
 
         lbl_title = QLabel("Processando seu GIF...")
         lbl_title.setObjectName("titleLabel")
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.lbl_progress_status = QLabel("Iniciando captura do vídeo...")
-        self.lbl_progress_status.setObjectName("subtitleLabel")
-        self.lbl_progress_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFixedWidth(420)
-
-        lbl_info = QLabel("Gravando em streaming contínuo diretamente no disco.")
-        lbl_info.setStyleSheet("font-size: 11px; color: #71717a;")
-        lbl_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         card_layout.addWidget(lbl_title)
-        card_layout.addWidget(self.lbl_progress_status)
-        card_layout.addWidget(self.progress_bar, alignment=Qt.AlignmentFlag.AlignCenter)
-        card_layout.addWidget(lbl_info)
+
+        # --- ETAPA 1: Leitura e Processamento ---
+        card_layout.addSpacing(6)
+        lbl_step1 = QLabel("Passo 1/2: Leitura e Preparação dos Quadros")
+        lbl_step1.setObjectName("sectionTitle")
+        card_layout.addWidget(lbl_step1)
+
+        self.lbl_read_status = QLabel("Aguardando início...")
+        self.lbl_read_status.setObjectName("subtitleLabel")
+        card_layout.addWidget(self.lbl_read_status)
+
+        self.read_progress_bar = QProgressBar()
+        self.read_progress_bar.setRange(0, 100)
+        self.read_progress_bar.setValue(0)
+        card_layout.addWidget(self.read_progress_bar)
+
+        # --- ETAPA 2: Gravação e Codificação do GIF ---
+        card_layout.addSpacing(10)
+        lbl_step2 = QLabel("Passo 2/2: Codificação e Gravação do GIF")
+        lbl_step2.setObjectName("sectionTitle")
+        card_layout.addWidget(lbl_step2)
+
+        self.lbl_save_status = QLabel("Aguardando leitura dos frames...")
+        self.lbl_save_status.setObjectName("subtitleLabel")
+        card_layout.addWidget(self.lbl_save_status)
+
+        self.save_progress_bar = QProgressBar()
+        self.save_progress_bar.setRange(0, 100)
+        self.save_progress_bar.setValue(0)
+        card_layout.addWidget(self.save_progress_bar)
 
         layout.addWidget(card)
         return widget
@@ -339,8 +356,12 @@ class GifConverterApp(QMainWindow):
         less_colors = self.chk_less_colors.isChecked()
         overwrite = self.chk_overwrite.isChecked()
 
-        self.progress_bar.setValue(0)
-        self.lbl_progress_status.setText("Lendo arquivo de vídeo...")
+        self.read_progress_bar.setValue(0)
+        self.save_progress_bar.setValue(0)
+        self.lbl_read_status.setText("Iniciando leitura do arquivo de vídeo...")
+        self.lbl_read_status.setStyleSheet("color: #a1a1aa;")
+        self.lbl_save_status.setText("Aguardando preparação dos frames...")
+        self.lbl_save_status.setStyleSheet("color: #71717a;")
         self.stacked_widget.setCurrentIndex(2)
 
         self.worker = ConversionWorker(
@@ -352,17 +373,37 @@ class GifConverterApp(QMainWindow):
             less_colors=less_colors,
             overwrite=overwrite,
         )
-        self.worker.progress_updated.connect(self.on_progress_update)
+        self.worker.read_progress_updated.connect(self.on_read_progress_update)
+        self.worker.save_progress_updated.connect(self.on_save_progress_update)
         self.worker.conversion_completed.connect(self.on_conversion_completed)
         self.worker.conversion_failed.connect(self.on_conversion_failed)
         self.worker.start()
 
-    def on_progress_update(self, current: int, total: int) -> None:
-        """Slot para atualização thread-safe da barra de progresso."""
+    def on_read_progress_update(self, current: int, total: int) -> None:
+        """Slot para atualização em tempo real da barra de leitura dos frames."""
         if total > 0:
             percentage = int((current / total) * 100)
-            self.progress_bar.setValue(percentage)
-            self.lbl_progress_status.setText(f"Processando frames: {current}/{total} ({percentage}%)")
+            self.read_progress_bar.setValue(percentage)
+            if percentage >= 100:
+                self.lbl_read_status.setText(f"✓ Todos os {total} frames foram lidos e preparados!")
+                self.lbl_read_status.setStyleSheet("color: #10b981; font-weight: 500;")
+                self.lbl_save_status.setText("Iniciando codificação e gravação no disco...")
+                self.lbl_save_status.setStyleSheet("color: #38bdf8;")
+            else:
+                self.lbl_read_status.setText(f"Lendo e redimensionando: {current}/{total} frames ({percentage}%)")
+                self.lbl_read_status.setStyleSheet("color: #a1a1aa;")
+
+    def on_save_progress_update(self, current: int, total: int) -> None:
+        """Slot para atualização em tempo real da barra de gravação do GIF."""
+        if total > 0:
+            percentage = int((current / total) * 100)
+            self.save_progress_bar.setValue(percentage)
+            if percentage >= 100:
+                self.lbl_save_status.setText("✓ GIF codificado e gravado no disco com sucesso!")
+                self.lbl_save_status.setStyleSheet("color: #10b981; font-weight: 500;")
+            else:
+                self.lbl_save_status.setText(f"Codificando e gravando frame {current}/{total} ({percentage}%)...")
+                self.lbl_save_status.setStyleSheet("color: #38bdf8;")
 
     def on_conversion_completed(self, gif_path: Path) -> None:
         """Slot acionado quando a conversão for concluída com sucesso."""
