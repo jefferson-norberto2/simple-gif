@@ -66,7 +66,7 @@ A Python tool to convert video files into optimized GIFs with customizable optio
 To compile the project into an executable, you can use PyInstaller.
 
 ```bash
-pyinstaller --onefile --windowed --copy-metadata imageio --add-data "simplegif/style.qss;simplegif" ./simplegif/app.py
+pyinstaller --onefile --windowed --copy-metadata imageio --add-data "simplegif/ui/style.qss;simplegif" ./simplegif/ui/app.py
 ```
 
 ## License
