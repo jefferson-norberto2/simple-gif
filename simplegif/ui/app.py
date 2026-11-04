@@ -3,6 +3,7 @@
 from pathlib import Path
 import sys
 
+import numpy as np
 from PySide6.QtCore import QRectF, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QCloseEvent,
@@ -36,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from simplegif import SimpleGIF
-from simplegif.utils import FrameProcessor, VideoReader
+from simplegif.utils import ConversionOptions, FrameProcessor, GifWriter, VideoReader
 
 
 def load_stylesheet(qss_name: str = "style.qss") -> str:
@@ -310,7 +311,7 @@ class GifConverterApp(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Simple GIF Maker")
-        self.setFixedSize(620, 760)
+        self.setFixedSize(620, 795)
         self.setStyleSheet(load_stylesheet())
 
         self.gif_maker = SimpleGIF()
@@ -323,6 +324,8 @@ class GifConverterApp(QMainWindow):
         self.video_fps: float = 30.0
         self.video_total_frames: int = 100
         self.video_duration: float = 0.0
+        self._sample_frame_bgr: np.ndarray | None = None
+        self._frame_byte_cache: dict[tuple[float, bool], int] = {}
 
         self.preview_timer = QTimer(self)
         self.preview_timer.timeout.connect(self._advance_preview_frame)
@@ -508,6 +511,7 @@ class GifConverterApp(QMainWindow):
         self.combo_scale = QComboBox()
         self.combo_scale.addItems(["100% (Original)", "75%", "60% (Recomendado)", "50%", "35%", "25%"])
         self.combo_scale.setCurrentIndex(2)  # 60%
+        self.combo_scale.currentIndexChanged.connect(self._update_size_estimate)
         grid.addWidget(self.combo_scale, 0, 1)
 
         grid.addWidget(QLabel("Intervalo de Quadros (Skip):"), 1, 0)
@@ -515,6 +519,7 @@ class GifConverterApp(QMainWindow):
         self.spin_frame_skip.setRange(1, 30)
         self.spin_frame_skip.setValue(5)
         self.spin_frame_skip.setSuffix(" quadros")
+        self.spin_frame_skip.valueChanged.connect(self._update_size_estimate)
         grid.addWidget(self.spin_frame_skip, 1, 1)
 
         card_layout.addLayout(grid)
@@ -522,11 +527,18 @@ class GifConverterApp(QMainWindow):
         # Checkboxes
         self.chk_less_colors = QCheckBox("Reduzir paleta de cores (Gera arquivos menores)")
         self.chk_less_colors.setChecked(True)
+        self.chk_less_colors.toggled.connect(self._update_size_estimate)
         card_layout.addWidget(self.chk_less_colors)
 
         self.chk_overwrite = QCheckBox("Sobrescrever arquivo se já existir")
         self.chk_overwrite.setChecked(False)
         card_layout.addWidget(self.chk_overwrite)
+
+        # Estimativa de Tamanho do GIF
+        self.lbl_size_estimate = QLabel("📊 Tamanho estimado do GIF: --")
+        self.lbl_size_estimate.setObjectName("sizeEstimateLabel")
+        self.lbl_size_estimate.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(self.lbl_size_estimate)
 
         layout.addWidget(card)
 
@@ -592,12 +604,16 @@ class GifConverterApp(QMainWindow):
             self.spin_start_time.blockSignals(False)
             self.spin_end_time.blockSignals(False)
 
-            self._update_range_summary()
+            self._frame_byte_cache.clear()
+            self._sample_frame_bgr = self.preview_reader.read_frame_at(0)
+
             self._show_preview_frame(0)
+            self._update_range_summary()
         except Exception as exc:
             self.lbl_video_meta.setText("")
             self.lbl_video_preview.setPixmap(QPixmap())
             self.lbl_video_preview.setText(f"Não foi possível carregar preview: {exc}")
+            self.lbl_size_estimate.setText("📊 Tamanho estimado do GIF: --")
 
     def _show_preview_frame(self, frame_index: int) -> None:
         """Lê um único quadro sob demanda e o renderiza no QLabel de preview."""
@@ -682,13 +698,76 @@ class GifConverterApp(QMainWindow):
         self._show_preview_frame(end_frame)
 
     def _update_range_summary(self) -> None:
-        """Atualiza o rótulo com o resumo do intervalo de tempo e contagem de quadros."""
+        """Atualiza o rótulo com o resumo do intervalo de tempo, contagem de quadros e tamanho estimado."""
         start_sec = self.spin_start_time.value()
         end_sec = self.spin_end_time.value()
         clip_duration = max(0.0, end_sec - start_sec)
         clip_frames = max(1, self.range_slider.end_value() - self.range_slider.start_value() + 1)
         self.lbl_range_summary.setText(
             f"{format_seconds(start_sec)} → {format_seconds(end_sec)} ({clip_duration:.1f}s • {clip_frames} frames)"
+        )
+        self._update_size_estimate()
+
+    def _get_selected_scale(self) -> float:
+        """Retorna o fator numérico de escala correspondente à opção selecionada no combo."""
+        scale_map = {
+            "100% (Original)": 1.0,
+            "75%": 0.75,
+            "60% (Recomendado)": 0.6,
+            "50%": 0.5,
+            "35%": 0.35,
+            "25%": 0.25,
+        }
+        return scale_map.get(self.combo_scale.currentText(), 0.6)
+
+    def get_estimated_gif_size_bytes(self) -> int:
+        """Calcula e retorna a estimativa de tamanho do GIF em bytes com base nas configurações atuais."""
+        if self.preview_reader is None:
+            return 0
+
+        meta = self.preview_reader.metadata
+        chosen_scale = self._get_selected_scale()
+        frame_skip = self.spin_frame_skip.value()
+        less_colors = self.chk_less_colors.isChecked()
+
+        cache_key = (chosen_scale, less_colors)
+        if cache_key not in self._frame_byte_cache:
+            single_opts = ConversionOptions(
+                scale=chosen_scale,
+                frame_skip=1,
+                less_colors=less_colors,
+                max_frames=1,
+            )
+            single_est = GifWriter.estimate_gif_size(
+                meta, single_opts, sample_frame=self._sample_frame_bgr
+            )
+            self._frame_byte_cache[cache_key] = max(96, single_est - 800)
+
+        per_frame_bytes = self._frame_byte_cache[cache_key]
+        clip_frames = max(1, self.range_slider.end_value() - self.range_slider.start_value() + 1)
+        inspected_frames = min(clip_frames, 3000)
+        output_frames = (inspected_frames + frame_skip - 1) // frame_skip
+        return 800 + (output_frames * per_frame_bytes)
+
+    def _update_size_estimate(self) -> None:
+        """Atualiza o componente visual de estimativa de tamanho do arquivo GIF."""
+        if self.preview_reader is None:
+            self.lbl_size_estimate.setText("📊 Tamanho estimado do GIF: --")
+            return
+
+        meta = self.preview_reader.metadata
+        chosen_scale = self._get_selected_scale()
+        frame_skip = self.spin_frame_skip.value()
+        clip_frames = max(1, self.range_slider.end_value() - self.range_slider.start_value() + 1)
+        output_frames = (min(clip_frames, 3000) + frame_skip - 1) // frame_skip
+        target_w, target_h = FrameProcessor.calculate_target_dimensions(
+            meta.width, meta.height, chosen_scale
+        )
+
+        estimated_bytes = self.get_estimated_gif_size_bytes()
+        formatted_size = GifWriter.format_file_size(estimated_bytes)
+        self.lbl_size_estimate.setText(
+            f"📊 Tamanho estimado: ~{formatted_size}  ({output_frames} quadros no GIF • {target_w}x{target_h} px)"
         )
 
     def toggle_preview_playback(self) -> None:
@@ -729,6 +808,8 @@ class GifConverterApp(QMainWindow):
     def _close_preview_reader(self) -> None:
         """Fecha com segurança o VideoReader usado pelo preview."""
         self._stop_preview_playback()
+        self._sample_frame_bgr = None
+        self._frame_byte_cache.clear()
         if self.preview_reader is not None:
             self.preview_reader.close()
             self.preview_reader = None
@@ -801,15 +882,7 @@ class GifConverterApp(QMainWindow):
 
         self._close_preview_reader()
 
-        scale_map = {
-            "100% (Original)": 1.0,
-            "75%": 0.75,
-            "60% (Recomendado)": 0.6,
-            "50%": 0.5,
-            "35%": 0.35,
-            "25%": 0.25,
-        }
-        chosen_scale = scale_map.get(self.combo_scale.currentText(), 0.6)
+        chosen_scale = self._get_selected_scale()
         frame_skip = self.spin_frame_skip.value()
         less_colors = self.chk_less_colors.isChecked()
         overwrite = self.chk_overwrite.isChecked()

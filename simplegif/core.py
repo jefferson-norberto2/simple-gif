@@ -180,6 +180,32 @@ class SimpleGIF:
 
         return converted_files
 
+    def estimate_file_size(
+        self,
+        path: str | Path,
+        scale: float = 0.6,
+        less_colors: bool = False,
+        max_frames: int = 2000,
+        frame_skip: int = 5,
+        start_time: float = 0.0,
+        end_time: float | None = None,
+    ) -> int:
+        """Estima em bytes o tamanho aproximado do GIF antes da conversão completa."""
+        options = ConversionOptions(
+            scale=scale,
+            frame_skip=frame_skip,
+            less_colors=less_colors,
+            max_frames=max_frames,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        input_path = Path(path).resolve()
+        with VideoReader(input_path) as reader:
+            meta = reader.metadata
+            mid_sec = start_time + ((end_time - start_time) / 2.0 if end_time is not None else meta.duration_seconds / 2.0)
+            sample_frame = reader.read_frame_at_time(mid_sec)
+            return GifWriter.estimate_gif_size(meta, options, sample_frame=sample_frame)
+
     def save_gif(self, progress_callback: Callable[[int, int], None] | None = None) -> int:
         """Método mantido para retrocompatibilidade."""
         return 0

@@ -10,8 +10,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 from simplegif import SimpleGIF
-from simplegif.ui.app import GifConverterApp, RangeSlider
-from simplegif.utils import ConversionOptions, VideoReader
+from simplegif.ui.app import GifConverterApp
+from simplegif.utils import ConversionOptions, GifWriter, VideoReader
 
 
 @pytest.fixture(scope="module")
@@ -104,6 +104,51 @@ def test_ui_preview_and_range_slider_sync(qapp: QApplication, sample_video_path:
         window.spin_end_time.setValue(2.5)
         assert window.range_slider.start_value() == 10
         assert window.range_slider.end_value() == 24
+    finally:
+        window.close()
+
+
+def test_gif_size_estimation_core_and_ui(qapp: QApplication, sample_video_path: Path) -> None:
+    """Valida o cálculo e a atualização dinâmica da estimativa de tamanho do GIF no core e na UI."""
+    gif_maker = SimpleGIF()
+    est_full = gif_maker.estimate_file_size(sample_video_path, scale=1.0, frame_skip=1, less_colors=False)
+    est_half_range = gif_maker.estimate_file_size(
+        sample_video_path, scale=1.0, frame_skip=1, less_colors=False, start_time=0.0, end_time=1.5
+    )
+    est_less_colors = gif_maker.estimate_file_size(
+        sample_video_path, scale=1.0, frame_skip=1, less_colors=True
+    )
+
+    assert est_full > est_half_range > 0
+    assert est_less_colors < est_full
+    assert "KB" in GifWriter.format_file_size(50 * 1024)
+    assert "MB" in GifWriter.format_file_size(3 * 1024 * 1024)
+
+    window = GifConverterApp()
+    try:
+        window.load_video_file(sample_video_path)
+        size_initial = window.get_estimated_gif_size_bytes()
+        assert size_initial > 0
+        assert "Tamanho estimado: ~" in window.lbl_size_estimate.text()
+
+        # Reduzir o range pela metade reduz o tamanho estimado
+        window.range_slider.set_values(0, 14, emit_signals=True)
+        size_shorter_range = window.get_estimated_gif_size_bytes()
+        assert size_shorter_range < size_initial
+
+        # Aumentar o frame_skip reduz o tamanho estimado
+        window.spin_frame_skip.setValue(1)
+        size_skip_1 = window.get_estimated_gif_size_bytes()
+        window.spin_frame_skip.setValue(5)
+        size_skip_5 = window.get_estimated_gif_size_bytes()
+        assert size_skip_5 < size_skip_1
+
+        # Desmarcar redução de paleta aumenta o tamanho estimado
+        window.chk_less_colors.setChecked(True)
+        size_less_colors = window.get_estimated_gif_size_bytes()
+        window.chk_less_colors.setChecked(False)
+        size_more_colors = window.get_estimated_gif_size_bytes()
+        assert size_less_colors < size_more_colors
     finally:
         window.close()
 
