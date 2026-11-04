@@ -49,7 +49,7 @@ QLineEdit:disabled, QLineEdit:read-only {
     border: 1px solid #3f3f46;
 }
 
-QComboBox, QSpinBox {
+QComboBox, QSpinBox, QDoubleSpinBox {
     background-color: #1e1e24;
     border: 1px solid #52525b;
     border-radius: 8px;
@@ -57,8 +57,22 @@ QComboBox, QSpinBox {
     color: #f4f4f5;
 }
 
-QComboBox:focus, QSpinBox:focus {
+QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
     border: 1px solid #10b981;
+}
+
+QLabel#videoPreviewLabel {
+    background-color: #121215;
+    border: 1px solid #3f3f46;
+    border-radius: 8px;
+    color: #71717a;
+    font-size: 12px;
+}
+
+QLabel#rangeSummaryLabel {
+    color: #10b981;
+    font-size: 12px;
+    font-weight: 600;
 }
 
 QComboBox::drop-down {

@@ -36,11 +36,13 @@ class SimpleGIF:
         max_frames: int = 2000,
         frame_skip: int = 5,
         overwrite: bool = False,
+        start_time: float = 0.0,
+        end_time: float | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
         read_progress_callback: Callable[[int, int], None] | None = None,
         save_progress_callback: Callable[[int, int], None] | None = None,
     ) -> Path:
-        """Converte um arquivo de vídeo para formato GIF com suporte a progresso em 2 etapas.
+        """Converte um arquivo de vídeo para formato GIF com suporte a recorte de tempo e progresso em 2 etapas.
 
         Args:
             path: Caminho do arquivo de vídeo de entrada.
@@ -50,6 +52,8 @@ class SimpleGIF:
             max_frames: Número máximo de quadros a processar (>= 1).
             frame_skip: Intervalo de amostragem de quadros (>= 1).
             overwrite: Se True, permite sobrescrever o arquivo de saída existente.
+            start_time: Instante inicial do recorte em segundos (>= 0.0).
+            end_time: Instante final do recorte em segundos (None para até o fim do vídeo).
             progress_callback: Callback unificado de progresso durante o ciclo completo (atual, total).
             read_progress_callback: Callback específico da etapa 1: Leitura do vídeo (atual, total).
             save_progress_callback: Callback específico da etapa 2: Gravação no disco (atual, total).
@@ -63,6 +67,8 @@ class SimpleGIF:
             less_colors=less_colors,
             max_frames=max_frames,
             overwrite=overwrite,
+            start_time=start_time,
+            end_time=end_time,
         )
 
         input_path = Path(path).resolve()
@@ -90,6 +96,8 @@ class SimpleGIF:
             for _, frame in reader.iter_frames(
                 max_frames=options.max_frames,
                 frame_skip=options.frame_skip,
+                start_time=options.start_time,
+                end_time=options.end_time,
                 progress_callback=on_read,
             ):
                 processed_img = FrameProcessor.process_frame(

@@ -20,6 +20,11 @@ class VideoMetadata:
         if self.total_frames < 0:
             raise ValueError(f"Contagem de quadros não pode ser negativa: {self.total_frames}")
 
+    @property
+    def duration_seconds(self) -> float:
+        """Retorna a duração total estimada do vídeo em segundos."""
+        return self.total_frames / self.fps if self.fps > 0 else 0.0
+
 
 @dataclass(frozen=True)
 class ConversionOptions:
@@ -30,6 +35,8 @@ class ConversionOptions:
     less_colors: bool = False
     max_frames: int = 2000
     overwrite: bool = False
+    start_time: float = 0.0
+    end_time: float | None = None
 
     def __post_init__(self) -> None:
         if self.scale <= 0:
@@ -38,3 +45,10 @@ class ConversionOptions:
             raise ValueError(f"frame_skip deve ser maior ou igual a 1: {self.frame_skip}")
         if self.max_frames < 1:
             raise ValueError(f"max_frames deve ser maior ou igual a 1: {self.max_frames}")
+        if self.start_time < 0:
+            raise ValueError(f"start_time não pode ser negativo: {self.start_time}")
+        if self.end_time is not None and self.end_time <= self.start_time:
+            raise ValueError(
+                f"end_time ({self.end_time}) deve ser maior que start_time ({self.start_time})"
+            )
+

@@ -73,39 +73,85 @@ class VideoReader:
         assert self._metadata is not None
         return self._metadata
 
-    def iter_frames(
-        self,
-        max_frames: int = 2000,
-        frame_skip: int = 1,
-        progress_callback: Callable[[int, int], None] | None = None,
-    ) -> Generator[tuple[int, np.ndarray], None, None]:
-        """Gera quadros brutos lidos do vídeo aplicando a amostragem configurada.
-
-        Yields:
-            tuple[int, np.ndarray]: Tupla contendo (índice_quadro, quadro_bgr_numpy).
-        """
+    def read_frame_at(self, frame_index: int) -> np.ndarray | None:
+        """Busca e retorna um único quadro (BGR) pelo seu índice para pré-visualização."""
         if self._cap is None:
             self.open()
         assert self._cap is not None
 
         meta = self.metadata
-        target_frames = min(meta.total_frames, max_frames) if meta.total_frames > 0 else max_frames
+        clamped_idx = max(0, int(frame_index))
+        if meta.total_frames > 0:
+            clamped_idx = min(clamped_idx, meta.total_frames - 1)
+
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, clamped_idx)
+        ret, frame = self._cap.read()
+        if not ret or frame is None:
+            return None
+        return frame
+
+    def read_frame_at_time(self, time_seconds: float) -> np.ndarray | None:
+        """Busca e retorna um único quadro (BGR) correspondente ao instante em segundos."""
+        meta = self.metadata
+        frame_idx = int(round(max(0.0, time_seconds) * meta.fps))
+        return self.read_frame_at(frame_idx)
+
+    def iter_frames(
+        self,
+        max_frames: int = 2000,
+        frame_skip: int = 1,
+        start_time: float = 0.0,
+        end_time: float | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> Generator[tuple[int, np.ndarray], None, None]:
+        """Gera quadros brutos lidos do vídeo aplicando o intervalo de tempo e a amostragem configurados.
+
+        Yields:
+            tuple[int, np.ndarray]: Tupla contendo (índice_quadro, quadro_bgr_numpy).
+        """
+        if start_time < 0:
+            raise ValueError(f"start_time não pode ser negativo: {start_time}")
+        if end_time is not None and end_time <= start_time:
+            raise ValueError(f"end_time ({end_time}) deve ser maior que start_time ({start_time})")
+
+        if self._cap is None:
+            self.open()
+        assert self._cap is not None
+
+        meta = self.metadata
+        start_frame = max(0, int(round(start_time * meta.fps)))
+
+        if end_time is not None:
+            end_frame = int(round(end_time * meta.fps))
+            if meta.total_frames > 0:
+                end_frame = min(meta.total_frames, end_frame)
+            end_frame = max(start_frame + 1, end_frame) if (meta.total_frames == 0 or start_frame < meta.total_frames) else start_frame
+        else:
+            end_frame = meta.total_frames if meta.total_frames > 0 else (start_frame + max_frames)
+
+        if meta.total_frames > 0 and start_frame >= meta.total_frames:
+            return
+
+        range_frames = max(0, end_frame - start_frame)
+        target_frames = min(range_frames, max_frames) if range_frames > 0 else max_frames
+
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
         if progress_callback:
             progress_callback(0, target_frames)
 
-        frame_idx = 0
-        while frame_idx < target_frames:
+        read_count = 0
+        while read_count < target_frames:
             ret, frame = self._cap.read()
             if not ret or frame is None:
                 break
 
-            if frame_idx % frame_skip == 0:
-                yield frame_idx, frame
+            if read_count % frame_skip == 0:
+                yield start_frame + read_count, frame
 
-            frame_idx += 1
+            read_count += 1
             if progress_callback:
-                progress_callback(frame_idx, target_frames)
+                progress_callback(read_count, target_frames)
 
         if progress_callback:
             progress_callback(target_frames, target_frames)
