@@ -117,7 +117,30 @@ class OptionsScreen(QWidget):
         right_layout.addWidget(lbl_out)
         right_layout.addLayout(out_row)
 
-        # 3. Parâmetros de Exportação
+        # 3. Nome do GIF
+        lbl_name = QLabel("Nome do GIF:")
+        lbl_name.setObjectName("sectionTitle")
+        name_row = QHBoxLayout()
+        name_row.setSpacing(6)
+
+        self.entry_gif_name = QLineEdit()
+        self.entry_gif_name.setPlaceholderText("nome_do_arquivo")
+        self.entry_gif_name.textChanged.connect(lambda _t: self.options_changed.emit())
+
+        lbl_ext = QLabel(".gif")
+        lbl_ext.setStyleSheet("color: #a1a1aa; font-weight: bold; font-size: 14px; padding-left: 2px;")
+
+        name_row.addWidget(self.entry_gif_name, stretch=1)
+        name_row.addWidget(lbl_ext)
+
+        self.chk_overwrite = QCheckBox("Sobrescrever arquivo se já existir")
+        self.chk_overwrite.setChecked(False)
+
+        right_layout.addWidget(lbl_name)
+        right_layout.addLayout(name_row)
+        right_layout.addWidget(self.chk_overwrite)
+
+        # 4. Parâmetros de Exportação
         grid = QGridLayout()
         grid.setSpacing(10)
 
@@ -140,15 +163,11 @@ class OptionsScreen(QWidget):
 
         right_layout.addLayout(grid)
 
-        # 4. Checkboxes de Opções
+        # Checkbox de paleta de cores mantido aqui
         self.chk_less_colors = QCheckBox("Reduzir paleta de cores (Gera arquivos menores)")
         self.chk_less_colors.setChecked(True)
         self.chk_less_colors.toggled.connect(lambda _checked: self.options_changed.emit())
         right_layout.addWidget(self.chk_less_colors)
-
-        self.chk_overwrite = QCheckBox("Sobrescrever arquivo se já existir")
-        self.chk_overwrite.setChecked(False)
-        right_layout.addWidget(self.chk_overwrite)
 
         # Espaçador vertical para empurrar o rodapé dinâmico para a base
         right_layout.addStretch(1)
@@ -222,6 +241,8 @@ class OptionsScreen(QWidget):
         """Configura o Estado 1 — Inicial (Sem Vídeo Selecionado)."""
         self.entry_input_path.setText("")
         self.entry_output_dir.setText("")
+        self.entry_gif_name.setText("")
+        self.chk_overwrite.setChecked(False)
         self.lbl_video_meta.setText("")
         self.video_preview.reset()
 
@@ -240,6 +261,7 @@ class OptionsScreen(QWidget):
         """Configura o Estado 2 — Vídeo Carregado (Pronto para Configurar)."""
         self.entry_input_path.setText(str(video_path))
         self.entry_output_dir.setText(str(output_dir))
+        self.entry_gif_name.setText(video_path.stem)
         self.lbl_video_meta.setText(meta_text)
 
         self.set_inputs_enabled(True)
@@ -304,8 +326,9 @@ class OptionsScreen(QWidget):
         """Controla a habilitação dos campos de configuração durante ou fora da conversão."""
         self.btn_select_file.setEnabled(True)
         self.btn_browse_out.setEnabled(enabled)
+        self.entry_gif_name.setEnabled(enabled)
+        self.chk_overwrite.setEnabled(enabled)
         self.combo_scale.setEnabled(enabled)
         self.spin_frame_skip.setEnabled(enabled)
         self.chk_less_colors.setEnabled(enabled)
-        self.chk_overwrite.setEnabled(enabled)
         self.video_preview.set_controls_enabled(enabled)

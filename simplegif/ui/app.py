@@ -1,6 +1,8 @@
 """Janela principal da aplicação Simple GIF Maker com layout Widescreen em Tela Única."""
 
 from pathlib import Path
+import os
+import re
 import sys
 
 from PySide6.QtCore import QUrl
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QSpinBox,
@@ -172,6 +175,10 @@ class GifConverterApp(QMainWindow):
         return self.screen_options.entry_output_dir
 
     @property
+    def entry_gif_name(self) -> QLineEdit:
+        return self.screen_options.entry_gif_name
+
+    @property
     def read_progress_bar(self) -> QProgressBar:
         return self.screen_options.progress_bar
 
@@ -300,9 +307,51 @@ class GifConverterApp(QMainWindow):
             f"📊 Tamanho estimado: ~{formatted_size} ({target_w}x{target_h} px • {output_frames} quadros)"
         )
 
+    @staticmethod
+    def sanitize_filename(name: str) -> str:
+        """Remove caracteres inválidos do nome de arquivo e espaços nas pontas."""
+        cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name).strip()
+        return cleaned.rstrip(". ")
+
+    def get_target_gif_path(self) -> Path:
+        """Retorna o caminho completo final do arquivo GIF validado."""
+        raw_name = self.screen_options.entry_gif_name.text().strip()
+        clean_name = self.sanitize_filename(raw_name)
+
+        if not clean_name:
+            clean_name = self.selected_file.stem if self.selected_file else "output"
+
+        if clean_name.lower().endswith(".gif"):
+            clean_name = clean_name[:-4]
+
+        target_folder = self.output_dir or Path.home()
+        return (target_folder / f"{clean_name}.gif").resolve()
+
     def start_conversion(self) -> None:
         """Dispara a conversão em background via ConversionController com progresso in-place."""
         if not self.selected_file or not self.output_dir:
+            return
+
+        target_gif_path = self.get_target_gif_path()
+        overwrite = self.chk_overwrite.isChecked()
+
+        if target_gif_path.is_file() and not overwrite:
+            msg = (
+                f"O arquivo '{target_gif_path.name}' já existe na pasta de destino. "
+                "Altere o nome do GIF ou marque a opção 'Sobrescrever arquivo se já existir'."
+            )
+            self.screen_options.set_conversion_completed_state(
+                success=False,
+                msg=msg,
+                is_file_exists=True,
+            )
+            if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+                QMessageBox.warning(
+                    self,
+                    "Arquivo Já Existe",
+                    f"O arquivo '{target_gif_path.name}' já existe na pasta de destino.\n\n"
+                    "Por favor, altere o nome do arquivo ou marque a opção 'Sobrescrever arquivo se já existir'.",
+                )
             return
 
         self.preview_controller.stop_playback()
@@ -310,14 +359,13 @@ class GifConverterApp(QMainWindow):
         scale = self.screen_options.get_selected_scale()
         frame_skip = self.spin_frame_skip.value()
         less_colors = self.chk_less_colors.isChecked()
-        overwrite = self.chk_overwrite.isChecked()
         start_time, end_time = self.screen_options.video_preview.get_selected_time_range()
 
         self.screen_options.set_converting_state()
 
         self.worker = self.conversion_controller.start_conversion(
             input_path=self.selected_file,
-            output_path=self.output_dir,
+            output_path=target_gif_path,
             scale=scale,
             frame_skip=frame_skip,
             less_colors=less_colors,

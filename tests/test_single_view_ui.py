@@ -40,6 +40,10 @@ def test_state_1_initial_without_video(qapp: QApplication) -> None:
         assert window.screen_options.lbl_video_meta.text() == ""
         assert window.entry_input_path.text() == ""
         assert window.entry_output_dir.text() == ""
+        assert window.entry_gif_name.text() == ""
+        assert not window.entry_gif_name.isEnabled()
+        assert not window.chk_overwrite.isEnabled()
+        assert not window.chk_overwrite.isChecked()
 
         # Estimativa inicial
         assert "📊 Estimado: --" in window.lbl_size_estimate.text()
@@ -71,6 +75,11 @@ def test_state_2_video_loaded(qapp: QApplication, sample_video_path: Path) -> No
 
         # Pasta de saída preenchida automaticamente com a pasta do vídeo
         assert window.entry_output_dir.text() == str(sample_video_path.parent)
+
+        # Nome do GIF preenchido automaticamente com o stem do vídeo e habilitado
+        assert window.entry_gif_name.text() == sample_video_path.stem
+        assert window.entry_gif_name.isEnabled()
+        assert window.chk_overwrite.isEnabled()
 
         # Estimativa e botão de início visíveis
         assert "Tamanho estimado: ~" in window.lbl_size_estimate.text()
@@ -208,5 +217,73 @@ def test_estimation_beyond_3000_frames(qapp: QApplication) -> None:
         window._update_size_estimate()
         # 5000 quadros com frame_skip=5 deve resultar em 1000 quadros no GIF, não 600
         assert "1000 quadros" in window.lbl_size_estimate.text()
+    finally:
+        window.close()
+
+
+def test_gif_name_validation_and_sanitization(
+    qapp: QApplication, sample_video_path: Path
+) -> None:
+    """Valida a sanitização do nome do GIF, extensão única e fallback quando vazio."""
+    window = GifConverterApp()
+    try:
+        window.load_video_file(sample_video_path)
+
+        # 1. Padrão inicial
+        assert window.entry_gif_name.text() == sample_video_path.stem
+        assert window.get_target_gif_path().name == f"{sample_video_path.stem}.gif"
+
+        # 2. Nome customizado
+        window.entry_gif_name.setText("meu_animado")
+        assert window.get_target_gif_path().name == "meu_animado.gif"
+
+        # 3. Nome customizado digitado com .gif (não deve duplicar para .gif.gif)
+        window.entry_gif_name.setText("animacao_teste.gif")
+        assert window.get_target_gif_path().name == "animacao_teste.gif"
+
+        # 4. Caracteres inválidos de sistema de arquivos são removidos
+        window.entry_gif_name.setText("meu:video/final*teste?.gif")
+        assert window.get_target_gif_path().name == "meuvideofinalteste.gif"
+
+        # 5. Campo vazio usa nome do vídeo original como fallback
+        window.entry_gif_name.setText("   ")
+        assert window.get_target_gif_path().name == f"{sample_video_path.stem}.gif"
+    finally:
+        window.close()
+
+
+def test_overwrite_blocking_when_file_exists(
+    qapp: QApplication, sample_video_path: Path, tmp_path: Path
+) -> None:
+    """Valida bloqueio e exibição de alerta caso o arquivo já exista e sobrescrever esteja desmarcado."""
+    window = GifConverterApp()
+    try:
+        window.load_video_file(sample_video_path)
+        existing_gif = tmp_path / "existente.gif"
+        existing_gif.touch()
+
+        window.output_dir = tmp_path
+        window.entry_output_dir.setText(str(tmp_path))
+        window.entry_gif_name.setText("existente")
+        window.chk_overwrite.setChecked(False)
+
+        # Dispara conversão com arquivo já existente e overwrite=False
+        window.start_conversion()
+
+        # Conversão deve ser bloqueada sem iniciar worker
+        assert window.worker is None
+
+        # Alerta in-place de erro exibido informando que o arquivo já existe
+        assert not window.screen_options.lbl_result_status.isHidden()
+        assert "já existe" in window.screen_options.lbl_result_status.text()
+        assert not window.screen_options.btn_open_folder.isHidden()
+
+        # Agora marca a opção de sobrescrever
+        window.chk_overwrite.setChecked(True)
+        window.start_conversion()
+
+        # Com overwrite=True, o worker deve ser iniciado com sucesso
+        assert window.worker is not None
+        window.worker.wait(2000)
     finally:
         window.close()
