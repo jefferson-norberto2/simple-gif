@@ -26,6 +26,7 @@ class ConversionWorker(QThread):
         overwrite: bool,
         start_time: float = 0.0,
         end_time: float | None = None,
+        max_frames: int | None = None,
     ) -> None:
         super().__init__()
         self.gif_maker = gif_maker
@@ -37,6 +38,7 @@ class ConversionWorker(QThread):
         self.overwrite = overwrite
         self.start_time = start_time
         self.end_time = end_time
+        self.max_frames = max_frames
 
     def run(self) -> None:
         """Executa a conversão com callbacks reportados por Signals."""
@@ -46,7 +48,7 @@ class ConversionWorker(QThread):
                 output_path=self.output_path,
                 scale=self.scale,
                 less_colors=self.less_colors,
-                max_frames=3000,
+                max_frames=self.max_frames,
                 frame_skip=self.frame_skip,
                 overwrite=self.overwrite,
                 start_time=self.start_time,
@@ -95,6 +97,7 @@ class ConversionController(QObject):
         overwrite: bool,
         start_time: float = 0.0,
         end_time: float | None = None,
+        max_frames: int | None = None,
     ) -> ConversionWorker:
         """Cria e inicia o worker de conversão em segundo plano."""
         worker = ConversionWorker(
@@ -107,6 +110,7 @@ class ConversionController(QObject):
             overwrite=overwrite,
             start_time=start_time,
             end_time=end_time,
+            max_frames=max_frames,
         )
         worker.read_progress_updated.connect(self.read_progress_updated)
         worker.save_progress_updated.connect(self.save_progress_updated)

@@ -289,7 +289,7 @@ class GifConverterApp(QMainWindow):
         frame_skip = self.spin_frame_skip.value()
         start_f, end_f = self.screen_options.video_preview.get_selected_range_frames()
         clip_frames = max(1, end_f - start_f + 1)
-        output_frames = (min(clip_frames, 3000) + frame_skip - 1) // frame_skip
+        output_frames = (clip_frames + frame_skip - 1) // frame_skip
 
         target_w, target_h = FrameProcessor.calculate_target_dimensions(
             meta.width, meta.height, scale

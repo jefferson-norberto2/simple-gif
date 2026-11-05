@@ -52,11 +52,14 @@ class GifWriter:
             end_frame = (
                 metadata.total_frames
                 if metadata.total_frames > 0
-                else (start_frame + options.max_frames)
+                else (start_frame + (options.max_frames if options.max_frames is not None else 2000))
             )
 
         range_frames = max(0, end_frame - start_frame)
-        inspected_frames = min(range_frames, options.max_frames) if range_frames > 0 else 0
+        if options.max_frames is not None:
+            inspected_frames = min(range_frames, options.max_frames) if range_frames > 0 else 0
+        else:
+            inspected_frames = range_frames if range_frames > 0 else 0
         output_frames = (
             (inspected_frames + options.frame_skip - 1) // options.frame_skip
             if inspected_frames > 0

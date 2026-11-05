@@ -98,7 +98,7 @@ class VideoReader:
 
     def iter_frames(
         self,
-        max_frames: int = 2000,
+        max_frames: int | None = None,
         frame_skip: int = 1,
         start_time: float = 0.0,
         end_time: float | None = None,
@@ -125,15 +125,27 @@ class VideoReader:
             end_frame = int(round(end_time * meta.fps))
             if meta.total_frames > 0:
                 end_frame = min(meta.total_frames, end_frame)
-            end_frame = max(start_frame + 1, end_frame) if (meta.total_frames == 0 or start_frame < meta.total_frames) else start_frame
+            end_frame = (
+                max(start_frame + 1, end_frame)
+                if (meta.total_frames == 0 or start_frame < meta.total_frames)
+                else start_frame
+            )
         else:
-            end_frame = meta.total_frames if meta.total_frames > 0 else (start_frame + max_frames)
+            if meta.total_frames > 0:
+                end_frame = meta.total_frames
+            elif max_frames is not None:
+                end_frame = start_frame + max_frames
+            else:
+                end_frame = start_frame + 2000
 
         if meta.total_frames > 0 and start_frame >= meta.total_frames:
             return
 
         range_frames = max(0, end_frame - start_frame)
-        target_frames = min(range_frames, max_frames) if range_frames > 0 else max_frames
+        if max_frames is not None:
+            target_frames = min(range_frames, max_frames) if range_frames > 0 else max_frames
+        else:
+            target_frames = range_frames
 
         self._cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 

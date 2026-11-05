@@ -172,3 +172,41 @@ def test_state_4_conversion_failed_feedback(
         assert window.screen_options.btn_open_folder.isHidden()
     finally:
         window.close()
+
+
+def test_estimation_beyond_3000_frames(qapp: QApplication) -> None:
+    """Valida que vídeos com mais de 3000 quadros não são limitados artificialmente a 600 quadros."""
+    import numpy as np
+    from simplegif.utils.config import ConversionOptions, VideoMetadata
+    from simplegif.utils.writer import GifWriter
+
+    # Testa o estimador com metadados sintéticos de 5000 quadros vs 3000 quadros
+    meta_5000 = VideoMetadata(width=640, height=360, fps=30.0, total_frames=5000)
+    meta_3000 = VideoMetadata(width=640, height=360, fps=30.0, total_frames=3000)
+    opts_skip5 = ConversionOptions(scale=0.5, frame_skip=5, less_colors=True)
+    sample_frame = np.zeros((360, 640, 3), dtype=np.uint8)
+
+    est_5000 = GifWriter.estimate_gif_size(meta_5000, opts_skip5, sample_frame=sample_frame)
+    est_3000 = GifWriter.estimate_gif_size(meta_3000, opts_skip5, sample_frame=sample_frame)
+
+    assert est_5000 > est_3000
+
+    # Testa na janela da aplicação com RangeSlider simulando 5000 quadros
+    window = GifConverterApp()
+    try:
+        class _MockReader:
+            metadata = meta_5000
+
+            def close(self) -> None:
+                pass
+
+        window.preview_controller.reader = _MockReader()
+        window.range_slider.set_range_bounds(0, 4999)
+        window.range_slider.set_values(0, 4999, emit_signals=False)
+        window.spin_frame_skip.setValue(5)
+
+        window._update_size_estimate()
+        # 5000 quadros com frame_skip=5 deve resultar em 1000 quadros no GIF, não 600
+        assert "1000 quadros" in window.lbl_size_estimate.text()
+    finally:
+        window.close()

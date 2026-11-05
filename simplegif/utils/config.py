@@ -33,7 +33,7 @@ class ConversionOptions:
     scale: float = 0.6
     frame_skip: int = 5
     less_colors: bool = False
-    max_frames: int = 2000
+    max_frames: int | None = None
     overwrite: bool = False
     start_time: float = 0.0
     end_time: float | None = None
@@ -43,7 +43,7 @@ class ConversionOptions:
             raise ValueError(f"Escala deve ser maior que zero: {self.scale}")
         if self.frame_skip < 1:
             raise ValueError(f"frame_skip deve ser maior ou igual a 1: {self.frame_skip}")
-        if self.max_frames < 1:
+        if self.max_frames is not None and self.max_frames < 1:
             raise ValueError(f"max_frames deve ser maior ou igual a 1: {self.max_frames}")
         if self.start_time < 0:
             raise ValueError(f"start_time não pode ser negativo: {self.start_time}")

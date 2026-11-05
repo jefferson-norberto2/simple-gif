@@ -135,6 +135,7 @@ class PreviewController(QObject):
         less_colors: bool,
         start_frame: int,
         end_frame: int,
+        max_frames: int | None = None,
     ) -> int:
         """Calcula a estimativa de tamanho do GIF em bytes com base nas opções."""
         if self.reader is None:
@@ -156,7 +157,9 @@ class PreviewController(QObject):
 
         per_frame_bytes = self._frame_byte_cache[cache_key]
         clip_frames = max(1, end_frame - start_frame + 1)
-        inspected_frames = min(clip_frames, 3000)
+        inspected_frames = (
+            min(clip_frames, max_frames) if max_frames is not None else clip_frames
+        )
         output_frames = (inspected_frames + frame_skip - 1) // frame_skip
         return 800 + (output_frames * per_frame_bytes)
 
