@@ -132,6 +132,12 @@ QPushButton:pressed {
     background-color: #27272a;
 }
 
+QPushButton:disabled {
+    background-color: #27272a;
+    color: #71717a;
+    border: 1px solid #3f3f46;
+}
+
 QPushButton#primaryButton {
     background-color: #10b981;
     border: 1px solid #059669;
@@ -145,6 +151,12 @@ QPushButton#primaryButton:hover {
 
 QPushButton#primaryButton:pressed {
     background-color: #047857;
+}
+
+QPushButton#primaryButton:disabled {
+    background-color: #1e3a30;
+    color: #52796f;
+    border: 1px solid #284b3e;
 }
 
 QPushButton#secondaryButton {

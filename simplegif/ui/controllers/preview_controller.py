@@ -62,7 +62,7 @@ class PreviewController(QObject):
         self.metadata_loaded.emit(meta)
         return meta
 
-    def render_frame_at(self, frame_index: int, max_w: int = 400, max_h: int = 190) -> QPixmap | None:
+    def render_frame_at(self, frame_index: int, max_w: int = 800, max_h: int = 450) -> QPixmap | None:
         """Lê um quadro sob demanda e o converte em um QPixmap otimizado para o visor."""
         if self.reader is None:
             return None

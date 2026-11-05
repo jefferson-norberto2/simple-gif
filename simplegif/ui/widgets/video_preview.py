@@ -1,12 +1,13 @@
 """Widget composto para pré-visualização de vídeo e seleção de trecho."""
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -28,17 +29,20 @@ class VideoPreviewWidget(QWidget):
         self.video_fps: float = 30.0
         self.total_frames: int = 100
         self.duration_seconds: float = 0.0
+        self._current_pixmap: QPixmap | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        # 1. Visor de Vídeo
-        self.lbl_video_preview = QLabel("Pré-visualização do vídeo")
+        # 1. Visor de Vídeo (Expansível mantendo proporção)
+        self.lbl_video_preview = QLabel("Nenhum vídeo selecionado. Clique em Selecionar... ao lado")
         self.lbl_video_preview.setObjectName("videoPreviewLabel")
-        self.lbl_video_preview.setFixedHeight(190)
+        self.lbl_video_preview.setMinimumSize(360, 202)
+        self.lbl_video_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.lbl_video_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.lbl_video_preview)
+        self.lbl_video_preview.setWordWrap(True)
+        layout.addWidget(self.lbl_video_preview, stretch=1)
 
         # 2. Controles de Reprodução e Range Slider
         slider_row = QHBoxLayout()
@@ -78,12 +82,14 @@ class VideoPreviewWidget(QWidget):
         self.spin_end_time.valueChanged.connect(self._on_spin_end_changed)
         time_row.addWidget(self.spin_end_time)
 
-        self.lbl_range_summary = QLabel("Trecho: 00:00.0 → 00:00.0")
+        self.lbl_range_summary = QLabel("Trecho: 00:00.0 -> 00:00.0")
         self.lbl_range_summary.setObjectName("rangeSummaryLabel")
         self.lbl_range_summary.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         time_row.addWidget(self.lbl_range_summary, stretch=1)
 
         layout.addLayout(time_row)
+
+        self.reset()
 
     def setup_video(self, fps: float, total_frames: int, duration_seconds: float) -> None:
         """Inicializa limites do slider e dos controles de tempo com base no vídeo."""
@@ -109,16 +115,51 @@ class VideoPreviewWidget(QWidget):
         self.spin_start_time.blockSignals(False)
         self.spin_end_time.blockSignals(False)
 
+        self.set_controls_enabled(True)
         self.update_range_summary()
 
+    def set_controls_enabled(self, enabled: bool) -> None:
+        """Habilita ou desabilita os controles de reprodução e seleção de intervalo."""
+        self.btn_play_preview.setEnabled(enabled)
+        self.range_slider.setEnabled(enabled)
+        self.spin_start_time.setEnabled(enabled)
+        self.spin_end_time.setEnabled(enabled)
+
+    def reset(self) -> None:
+        """Restaura o estado inicial vazio do preview."""
+        self.set_preview_text("Nenhum vídeo selecionado. Clique em Selecionar... ao lado")
+        self.lbl_range_summary.setText("Trecho: 00:00.0 -> 00:00.0")
+        self.set_controls_enabled(False)
+
     def set_preview_pixmap(self, pixmap: QPixmap) -> None:
-        """Define o frame renderizado no visor de preview."""
-        self.lbl_video_preview.setPixmap(pixmap)
+        """Define o frame renderizado no visor de preview mantendo proporção."""
+        self._current_pixmap = pixmap
+        self._update_display_pixmap()
 
     def set_preview_text(self, text: str) -> None:
         """Define mensagem descritiva no visor de preview."""
+        self._current_pixmap = None
         self.lbl_video_preview.setPixmap(QPixmap())
         self.lbl_video_preview.setText(text)
+
+    def _update_display_pixmap(self) -> None:
+        """Redimensiona o pixmap suavemente para caber no visor mantendo aspect ratio."""
+        if self._current_pixmap is not None and not self._current_pixmap.isNull():
+            lbl_size = self.lbl_video_preview.size()
+            if lbl_size.width() > 10 and lbl_size.height() > 10:
+                scaled = self._current_pixmap.scaled(
+                    lbl_size,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                self.lbl_video_preview.setPixmap(scaled)
+            else:
+                self.lbl_video_preview.setPixmap(self._current_pixmap)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Redesenha o preview mantendo aspect ratio quando a janela for redimensionada."""
+        super().resizeEvent(event)
+        self._update_display_pixmap()
 
     def set_playback_playing(self, is_playing: bool) -> None:
         """Altera o texto do botão de reprodução dependendo do estado."""
@@ -139,7 +180,7 @@ class VideoPreviewWidget(QWidget):
         clip_duration = max(0.0, end_sec - start_sec)
         clip_frames = max(1, self.range_slider.end_value() - self.range_slider.start_value() + 1)
         self.lbl_range_summary.setText(
-            f"{format_seconds(start_sec)} → {format_seconds(end_sec)} ({clip_duration:.1f}s • {clip_frames} frames)"
+            f"Trecho: {format_seconds(start_sec)} -> {format_seconds(end_sec)} ({clip_duration:.1f}s • {clip_frames} frames)"
         )
 
     def _on_slider_start_changed(self, start_frame: int) -> None:
