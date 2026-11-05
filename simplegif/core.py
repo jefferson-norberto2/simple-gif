@@ -39,6 +39,9 @@ class SimpleGIF:
         overwrite: bool = False,
         start_time: float = 0.0,
         end_time: float | None = None,
+        show_speed_badge: bool = False,
+        badge_position: str = "Superior Direito",
+        badge_size: str = "Médio",
         progress_callback: Callable[[int, int], None] | None = None,
         read_progress_callback: Callable[[int, int], None] | None = None,
         save_progress_callback: Callable[[int, int], None] | None = None,
@@ -56,6 +59,9 @@ class SimpleGIF:
             overwrite: Se True, permite sobrescrever o arquivo de saída existente.
             start_time: Instante inicial do recorte em segundos (>= 0.0).
             end_time: Instante final do recorte em segundos (None para até o fim do vídeo).
+            show_speed_badge: Se True, renderiza banner flutuante com a velocidade nos quadros.
+            badge_position: Posição do banner (Superior Direito, Superior Esquerdo, etc.).
+            badge_size: Tamanho do banner (Pequeno, Médio, Grande).
             progress_callback: Callback unificado de progresso durante o ciclo completo (atual, total).
             read_progress_callback: Callback específico da etapa 1: Leitura do vídeo (atual, total).
             save_progress_callback: Callback específico da etapa 2: Gravação no disco (atual, total).
@@ -72,6 +78,9 @@ class SimpleGIF:
             overwrite=overwrite,
             start_time=start_time,
             end_time=end_time,
+            show_speed_badge=show_speed_badge,
+            badge_position=badge_position,
+            badge_size=badge_size,
         )
 
         input_path = Path(path).resolve()
@@ -108,6 +117,10 @@ class SimpleGIF:
                     target_w=target_w,
                     target_h=target_h,
                     less_colors=options.less_colors,
+                    show_speed_badge=options.show_speed_badge,
+                    speed=options.speed,
+                    badge_position=options.badge_position,
+                    badge_size=options.badge_size,
                 )
                 processed_frames.append(processed_img)
 
@@ -144,6 +157,9 @@ class SimpleGIF:
         max_frames: int = 2000,
         frame_skip: int = 5,
         overwrite: bool = False,
+        show_speed_badge: bool = False,
+        badge_position: str = "Superior Direito",
+        badge_size: str = "Médio",
     ) -> list[Path]:
         """Converte todos os arquivos de vídeo suportados em uma pasta para formato GIF.
 
@@ -156,6 +172,9 @@ class SimpleGIF:
             max_frames: Máximo de quadros a processar por arquivo de vídeo.
             frame_skip: Intervalo entre quadros processados.
             overwrite: Se True, sobrescreve arquivos GIF existentes.
+            show_speed_badge: Se True, renderiza banner com a velocidade no GIF.
+            badge_position: Posição do banner flutuante.
+            badge_size: Tamanho do banner flutuante.
 
         Returns:
             list[Path]: Lista de caminhos para os arquivos GIF gerados com sucesso.
@@ -181,6 +200,9 @@ class SimpleGIF:
                     max_frames=max_frames,
                     frame_skip=frame_skip,
                     overwrite=overwrite,
+                    show_speed_badge=show_speed_badge,
+                    badge_position=badge_position,
+                    badge_size=badge_size,
                 )
                 converted_files.append(result)
 

@@ -28,6 +28,9 @@ class ConversionWorker(QThread):
         start_time: float = 0.0,
         end_time: float | None = None,
         max_frames: int | None = None,
+        show_speed_badge: bool = False,
+        badge_position: str = "Superior Direito",
+        badge_size: str = "Médio",
     ) -> None:
         super().__init__()
         self.gif_maker = gif_maker
@@ -41,6 +44,9 @@ class ConversionWorker(QThread):
         self.start_time = start_time
         self.end_time = end_time
         self.max_frames = max_frames
+        self.show_speed_badge = show_speed_badge
+        self.badge_position = badge_position
+        self.badge_size = badge_size
 
     def run(self) -> None:
         """Executa a conversão com callbacks reportados por Signals."""
@@ -56,6 +62,9 @@ class ConversionWorker(QThread):
                 overwrite=self.overwrite,
                 start_time=self.start_time,
                 end_time=self.end_time,
+                show_speed_badge=self.show_speed_badge,
+                badge_position=self.badge_position,
+                badge_size=self.badge_size,
                 read_progress_callback=self._on_read_progress,
                 save_progress_callback=self._on_save_progress,
             )
@@ -102,6 +111,9 @@ class ConversionController(QObject):
         start_time: float = 0.0,
         end_time: float | None = None,
         max_frames: int | None = None,
+        show_speed_badge: bool = False,
+        badge_position: str = "Superior Direito",
+        badge_size: str = "Médio",
     ) -> ConversionWorker:
         """Cria e inicia o worker de conversão em segundo plano."""
         worker = ConversionWorker(
@@ -116,6 +128,9 @@ class ConversionController(QObject):
             start_time=start_time,
             end_time=end_time,
             max_frames=max_frames,
+            show_speed_badge=show_speed_badge,
+            badge_position=badge_position,
+            badge_size=badge_size,
         )
         worker.read_progress_updated.connect(self.read_progress_updated)
         worker.save_progress_updated.connect(self.save_progress_updated)

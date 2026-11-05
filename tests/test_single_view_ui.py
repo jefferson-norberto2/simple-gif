@@ -6,6 +6,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 from simplegif.ui.app import GifConverterApp
 
@@ -44,6 +45,10 @@ def test_state_1_initial_without_video(qapp: QApplication) -> None:
         assert not window.entry_gif_name.isEnabled()
         assert not window.chk_overwrite.isEnabled()
         assert not window.chk_overwrite.isChecked()
+        assert not window.chk_show_speed_badge.isEnabled()
+        assert not window.chk_show_speed_badge.isChecked()
+        assert not window.combo_badge_position.isEnabled()
+        assert not window.combo_badge_size.isEnabled()
 
         # Estimativa inicial
         assert "📊 Estimado: --" in window.lbl_size_estimate.text()
@@ -80,6 +85,10 @@ def test_state_2_video_loaded(qapp: QApplication, sample_video_path: Path) -> No
         assert window.entry_gif_name.text() == sample_video_path.stem
         assert window.entry_gif_name.isEnabled()
         assert window.chk_overwrite.isEnabled()
+        assert window.chk_show_speed_badge.isEnabled()
+        assert not window.chk_show_speed_badge.isChecked()
+        assert not window.combo_badge_position.isEnabled()
+        assert not window.combo_badge_size.isEnabled()
 
         # Estimativa e botão de início visíveis
         assert "Tamanho estimado: ~" in window.lbl_size_estimate.text()
@@ -334,5 +343,79 @@ def test_speed_control_ui_parsing_and_preview_sync(
         window.combo_speed.setEditText("0.5")
         assert window.preview_controller._playback_speed == 0.5
         window.preview_controller.stop_playback()
+    finally:
+        window.close()
+
+
+def test_speed_badge_ui_controls_and_preview_realtime_sync(
+    qapp: QApplication, sample_video_path: Path
+) -> None:
+    """Valida controles do banner de velocidade na interface, sincronização em tempo real e preview."""
+    def pixmap_bytes(pix: QPixmap) -> bytes:
+        qimg = pix.toImage()
+        return bytes(qimg.constBits())
+
+    window = GifConverterApp()
+    try:
+        window.load_video_file(sample_video_path)
+
+        # 1. Estado inicial com vídeo carregado: checkbox habilitado porém desmarcado; seletores desabilitados
+        assert window.chk_show_speed_badge.isEnabled()
+        assert not window.chk_show_speed_badge.isChecked()
+        assert not window.combo_badge_position.isEnabled()
+        assert not window.combo_badge_size.isEnabled()
+        assert not window.preview_controller._badge_enabled
+
+        # Pixmap inicial (sem banner)
+        pix_initial = window.lbl_video_preview.pixmap()
+        assert pix_initial is not None and not pix_initial.isNull()
+        bytes_initial = pixmap_bytes(pix_initial)
+
+        # 2. Marca o checkbox para exibir banner
+        window.chk_show_speed_badge.setChecked(True)
+        assert window.combo_badge_position.isEnabled()
+        assert window.combo_badge_size.isEnabled()
+        assert window.preview_controller._badge_enabled
+
+        # Pixmap deve ter sido atualizado imediatamente em tempo real
+        pix_badged = window.lbl_video_preview.pixmap()
+        bytes_badged = pixmap_bytes(pix_badged)
+        assert bytes_badged != bytes_initial
+
+        # 3. Altera a posição do banner
+        window.combo_badge_position.setCurrentText("Inferior Esquerdo")
+        assert window.screen_options.get_selected_badge_position() == "Inferior Esquerdo"
+        pix_bottom_left = window.lbl_video_preview.pixmap()
+        bytes_bottom_left = pixmap_bytes(pix_bottom_left)
+        assert bytes_bottom_left != bytes_badged
+
+        # 4. Altera o tamanho do banner
+        window.combo_badge_size.setCurrentText("Grande (8%)")
+        assert window.screen_options.get_selected_badge_size() == "Grande"
+        pix_large = window.lbl_video_preview.pixmap()
+        bytes_large = pixmap_bytes(pix_large)
+        assert bytes_large != bytes_bottom_left
+
+        # 5. Altera a velocidade do vídeo: atualiza o banner em tempo real
+        window.combo_speed.setCurrentText("3.0x")
+        pix_speed_3x = window.lbl_video_preview.pixmap()
+        bytes_speed_3x = pixmap_bytes(pix_speed_3x)
+        assert bytes_speed_3x != bytes_large
+
+        # 6. Durante playback o badge permanece ativo e renderizado
+        window.preview_controller.start_playback(0, 29, 0, speed=3.0)
+        assert window.preview_controller.is_playing
+        assert window.preview_controller._badge_enabled
+        window.preview_controller.stop_playback()
+
+        # 7. Desmarca o checkbox: os seletores voltam a desabilitar e o preview volta a ficar sem banner
+        window.chk_show_speed_badge.setChecked(False)
+        assert not window.combo_badge_position.isEnabled()
+        assert not window.combo_badge_size.isEnabled()
+        assert not window.preview_controller._badge_enabled
+
+        pix_restored = window.lbl_video_preview.pixmap()
+        bytes_restored = pixmap_bytes(pix_restored)
+        assert bytes_restored == bytes_initial
     finally:
         window.close()

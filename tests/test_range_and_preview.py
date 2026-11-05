@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
 from simplegif import SimpleGIF
 from simplegif.ui.app import GifConverterApp
-from simplegif.utils import ConversionOptions, GifWriter, VideoReader
+from simplegif.utils import ConversionOptions, FrameProcessor, GifWriter, VideoReader
 
 
 @pytest.fixture(scope="module")
@@ -214,3 +214,87 @@ def test_convert_file_with_playback_speed(sample_video_path: Path, tmp_path: Pat
     )
     with Image.open(out_half) as img:
         assert img.info["duration"] == 200
+
+
+def test_frame_processor_draw_speed_badge_positions_and_sizes() -> None:
+    """Valida o desenho do indicador de velocidade para todas as posições, tamanhos e proporção."""
+    base_img = Image.new("RGB", (640, 360), (128, 128, 128))
+
+    # Testa as 6 posições suportadas
+    positions = [
+        "Superior Direito",
+        "Superior Esquerdo",
+        "Inferior Direito",
+        "Inferior Esquerdo",
+        "Centro Superior",
+        "Centro Inferior",
+    ]
+    for pos in positions:
+        result = FrameProcessor.draw_speed_badge(
+            image=base_img,
+            speed=2.0,
+            position=pos,
+            size_mode="Médio",
+        )
+        assert result.size == (640, 360)
+        assert result.mode == "RGB"
+        # Deve haver pixels pretos/transparentes e brancos desenhados pelo banner
+        diff = sum(1 for p1, p2 in zip(result.getdata(), base_img.getdata()) if p1 != p2)
+        assert diff > 0
+
+    # Testa tamanhos (Pequeno, Médio, Grande) e proporção
+    small = FrameProcessor.draw_speed_badge(base_img, speed=1.5, position="Superior Direito", size_mode="Pequeno")
+    med = FrameProcessor.draw_speed_badge(base_img, speed=1.5, position="Superior Direito", size_mode="Médio")
+    large = FrameProcessor.draw_speed_badge(base_img, speed=1.5, position="Superior Direito", size_mode="Grande")
+
+    diff_small = sum(1 for p1, p2 in zip(small.getdata(), base_img.getdata()) if p1 != p2)
+    diff_med = sum(1 for p1, p2 in zip(med.getdata(), base_img.getdata()) if p1 != p2)
+    diff_large = sum(1 for p1, p2 in zip(large.getdata(), base_img.getdata()) if p1 != p2)
+
+    # Grande ocupa mais pixels modificados que Médio, que ocupa mais que Pequeno
+    assert diff_large > diff_med > diff_small
+
+
+def test_convert_file_with_speed_badge_overlay(sample_video_path: Path, tmp_path: Path) -> None:
+    """Verifica se a conversão com indicador de velocidade gera o GIF com o banner renderizado."""
+    gif_maker = SimpleGIF()
+    out_no_badge = tmp_path / "no_badge.gif"
+    out_with_badge = tmp_path / "with_badge.gif"
+
+    gif_maker.convert_file(
+        path=sample_video_path,
+        output_path=out_no_badge,
+        scale=0.5,
+        speed=2.0,
+        frame_skip=2,
+        start_time=0.0,
+        end_time=1.0,
+        show_speed_badge=False,
+        overwrite=True,
+    )
+
+    gif_maker.convert_file(
+        path=sample_video_path,
+        output_path=out_with_badge,
+        scale=0.5,
+        speed=2.0,
+        frame_skip=2,
+        start_time=0.0,
+        end_time=1.0,
+        show_speed_badge=True,
+        badge_position="Superior Direito",
+        badge_size="Médio",
+        overwrite=True,
+    )
+
+    assert out_no_badge.is_file()
+    assert out_with_badge.is_file()
+
+    with Image.open(out_no_badge) as img1, Image.open(out_with_badge) as img2:
+        img1.seek(0)
+        img2.seek(0)
+        # O quadro com badge deve ter diferenças visuais devido ao banner desenhado
+        frame1 = img1.convert("RGB")
+        frame2 = img2.convert("RGB")
+        diff_count = sum(1 for p1, p2 in zip(frame1.getdata(), frame2.getdata()) if p1 != p2)
+        assert diff_count > 0

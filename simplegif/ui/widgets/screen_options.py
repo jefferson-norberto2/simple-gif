@@ -180,6 +180,47 @@ class OptionsScreen(QWidget):
 
         right_layout.addLayout(grid)
 
+        # 5. Indicador Visual de Velocidade (Badge Flutuante)
+        self.chk_show_speed_badge = QCheckBox("Exibir indicador de velocidade no GIF")
+        self.chk_show_speed_badge.setChecked(False)
+        self.chk_show_speed_badge.toggled.connect(self._on_speed_badge_toggled)
+
+        badge_row = QHBoxLayout()
+        badge_row.setSpacing(8)
+
+        self.lbl_badge_pos = QLabel("Posição:")
+        self.combo_badge_pos = QComboBox()
+        self.combo_badge_pos.addItems([
+            "Superior Direito (Padrão)",
+            "Superior Esquerdo",
+            "Inferior Direito",
+            "Inferior Esquerdo",
+            "Centro Superior",
+            "Centro Inferior",
+        ])
+        self.combo_badge_pos.setCurrentIndex(0)
+        self.combo_badge_pos.setEnabled(False)
+        self.combo_badge_pos.currentIndexChanged.connect(lambda _idx: self.options_changed.emit())
+
+        self.lbl_badge_size = QLabel("Tamanho:")
+        self.combo_badge_size = QComboBox()
+        self.combo_badge_size.addItems([
+            "Pequeno (4%)",
+            "Médio (Padrão)",
+            "Grande (8%)",
+        ])
+        self.combo_badge_size.setCurrentIndex(1)
+        self.combo_badge_size.setEnabled(False)
+        self.combo_badge_size.currentIndexChanged.connect(lambda _idx: self.options_changed.emit())
+
+        badge_row.addWidget(self.lbl_badge_pos)
+        badge_row.addWidget(self.combo_badge_pos, stretch=1)
+        badge_row.addWidget(self.lbl_badge_size)
+        badge_row.addWidget(self.combo_badge_size, stretch=1)
+
+        right_layout.addWidget(self.chk_show_speed_badge)
+        right_layout.addLayout(badge_row)
+
         # Checkbox de paleta de cores mantido aqui
         self.chk_less_colors = QCheckBox("Reduzir paleta de cores (Gera arquivos menores)")
         self.chk_less_colors.setChecked(True)
@@ -241,6 +282,7 @@ class OptionsScreen(QWidget):
         right_layout.addLayout(footer_layout)
         main_layout.addWidget(right_card, stretch=37)
 
+        self._inputs_enabled = False
         self.set_initial_state()
 
     def get_selected_scale(self) -> float:
@@ -264,6 +306,32 @@ class OptionsScreen(QWidget):
         except ValueError:
             return 1.0
 
+    def get_selected_badge_position(self) -> str:
+        """Retorna a posição normalizada do indicador ('Superior Direito', etc.)."""
+        raw = self.combo_badge_pos.currentText()
+        return raw.replace("(Padrão)", "").strip()
+
+    def get_selected_badge_size(self) -> str:
+        """Retorna o tamanho normalizado do indicador ('Pequeno', 'Médio', 'Grande')."""
+        raw = self.combo_badge_size.currentText()
+        clean = (
+            raw.replace("(Padrão)", "")
+            .replace("(4%)", "")
+            .replace("(6%)", "")
+            .replace("(8%)", "")
+            .strip()
+        )
+        return clean
+
+    def _on_speed_badge_toggled(self, checked: bool) -> None:
+        """Habilita ou desabilita os seletores de posição e tamanho do indicador."""
+        badge_active = checked and getattr(self, "_inputs_enabled", False)
+        self.lbl_badge_pos.setEnabled(badge_active)
+        self.combo_badge_pos.setEnabled(badge_active)
+        self.lbl_badge_size.setEnabled(badge_active)
+        self.combo_badge_size.setEnabled(badge_active)
+        self.options_changed.emit()
+
     def set_size_estimate_text(self, text: str) -> None:
         """Atualiza a mensagem no badge de estimativa e restaura visibilidade padrão."""
         self.lbl_size_estimate.setText(text)
@@ -278,6 +346,9 @@ class OptionsScreen(QWidget):
         self.entry_gif_name.setText("")
         self.chk_overwrite.setChecked(False)
         self.combo_speed.setCurrentIndex(1)
+        self.chk_show_speed_badge.setChecked(False)
+        self.combo_badge_pos.setCurrentIndex(0)
+        self.combo_badge_size.setCurrentIndex(1)
         self.lbl_video_meta.setText("")
         self.video_preview.reset()
 
@@ -359,6 +430,7 @@ class OptionsScreen(QWidget):
 
     def set_inputs_enabled(self, enabled: bool) -> None:
         """Controla a habilitação dos campos de configuração durante ou fora da conversão."""
+        self._inputs_enabled = enabled
         self.btn_select_file.setEnabled(True)
         self.btn_browse_out.setEnabled(enabled)
         self.entry_gif_name.setEnabled(enabled)
@@ -366,5 +438,11 @@ class OptionsScreen(QWidget):
         self.combo_scale.setEnabled(enabled)
         self.spin_frame_skip.setEnabled(enabled)
         self.combo_speed.setEnabled(enabled)
+        self.chk_show_speed_badge.setEnabled(enabled)
+        badge_active = enabled and self.chk_show_speed_badge.isChecked()
+        self.lbl_badge_pos.setEnabled(badge_active)
+        self.combo_badge_pos.setEnabled(badge_active)
+        self.lbl_badge_size.setEnabled(badge_active)
+        self.combo_badge_size.setEnabled(badge_active)
         self.chk_less_colors.setEnabled(enabled)
         self.video_preview.set_controls_enabled(enabled)

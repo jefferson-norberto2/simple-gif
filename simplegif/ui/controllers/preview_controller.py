@@ -35,6 +35,11 @@ class PreviewController(QObject):
         self._playback_current: int = 0
         self._playback_speed: float = 1.0
 
+        self._badge_enabled: bool = False
+        self._badge_position: str = "Superior Direito"
+        self._badge_size: str = "Médio"
+        self._last_rendered_frame: int = 0
+
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_timer_tick)
 
@@ -63,11 +68,27 @@ class PreviewController(QObject):
         self.metadata_loaded.emit(meta)
         return meta
 
+    def set_badge_options(
+        self,
+        enabled: bool,
+        position: str = "Superior Direito",
+        size: str = "Médio",
+    ) -> None:
+        """Configura a sobreposição visual do indicador de velocidade no preview."""
+        self._badge_enabled = enabled
+        self._badge_position = position
+        self._badge_size = size
+
+    def refresh_current_frame(self, max_w: int = 800, max_h: int = 450) -> QPixmap | None:
+        """Re-renderiza o quadro atual com os parâmetros visuais atualizados."""
+        return self.render_frame_at(self._last_rendered_frame, max_w=max_w, max_h=max_h)
+
     def render_frame_at(self, frame_index: int, max_w: int = 800, max_h: int = 450) -> QPixmap | None:
         """Lê um quadro sob demanda e o converte em um QPixmap otimizado para o visor."""
         if self.reader is None:
             return None
 
+        self._last_rendered_frame = frame_index
         frame_bgr = self.reader.read_frame_at(frame_index)
         if frame_bgr is None:
             return None
@@ -78,10 +99,21 @@ class PreviewController(QObject):
 
         resized_bgr = FrameProcessor.resize(frame_bgr, target_w, target_h)
         rgb_frame = FrameProcessor.bgr_to_rgb(resized_bgr)
-        h, w, ch = rgb_frame.shape
+        pil_frame = FrameProcessor.to_pil(rgb_frame)
+
+        if self._badge_enabled:
+            pil_frame = FrameProcessor.draw_speed_badge(
+                image=pil_frame,
+                speed=self._playback_speed,
+                position=self._badge_position,
+                size_mode=self._badge_size,
+            )
+
+        rgb_arr = np.asarray(pil_frame)
+        h, w, ch = rgb_arr.shape
         bytes_per_line = ch * w
 
-        qimg = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format.Format_RGB888).copy()
+        qimg = QImage(rgb_arr.data, w, h, bytes_per_line, QImage.Format.Format_RGB888).copy()
         pixmap = QPixmap.fromImage(qimg)
         self.frame_ready.emit(pixmap, frame_index)
         return pixmap

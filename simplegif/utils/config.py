@@ -38,6 +38,9 @@ class ConversionOptions:
     overwrite: bool = False
     start_time: float = 0.0
     end_time: float | None = None
+    show_speed_badge: bool = False
+    badge_position: str = "Superior Direito"
+    badge_size: str = "Médio"
 
     def __post_init__(self) -> None:
         if self.scale <= 0:

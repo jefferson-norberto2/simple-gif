@@ -167,6 +167,18 @@ class GifConverterApp(QMainWindow):
         return self.screen_options.chk_overwrite
 
     @property
+    def chk_show_speed_badge(self) -> QCheckBox:
+        return self.screen_options.chk_show_speed_badge
+
+    @property
+    def combo_badge_position(self) -> QComboBox:
+        return self.screen_options.combo_badge_pos
+
+    @property
+    def combo_badge_size(self) -> QComboBox:
+        return self.screen_options.combo_badge_size
+
+    @property
     def lbl_size_estimate(self) -> QLabel:
         return self.screen_options.lbl_size_estimate
 
@@ -289,7 +301,21 @@ class GifConverterApp(QMainWindow):
         if not self.conversion_controller.is_running:
             self.screen_options.restore_estimate_display()
             speed = self.screen_options.get_selected_speed()
+            show_badge = self.screen_options.chk_show_speed_badge.isChecked()
+            badge_pos = self.screen_options.get_selected_badge_position()
+            badge_size = self.screen_options.get_selected_badge_size()
+
             self.preview_controller.set_playback_speed(speed)
+            self.preview_controller.set_badge_options(
+                enabled=show_badge,
+                position=badge_pos,
+                size=badge_size,
+            )
+
+            # Atualiza o frame do preview imediatamente (mesmo com o vídeo pausado)
+            if self.preview_controller.reader is not None and not self.preview_controller.is_playing:
+                self.preview_controller.refresh_current_frame()
+
             self._update_size_estimate()
 
     def _update_size_estimate(self) -> None:
@@ -379,6 +405,9 @@ class GifConverterApp(QMainWindow):
         frame_skip = self.spin_frame_skip.value()
         less_colors = self.chk_less_colors.isChecked()
         start_time, end_time = self.screen_options.video_preview.get_selected_time_range()
+        show_speed_badge = self.chk_show_speed_badge.isChecked()
+        badge_position = self.screen_options.get_selected_badge_position()
+        badge_size = self.screen_options.get_selected_badge_size()
 
         self.screen_options.set_converting_state()
 
@@ -392,6 +421,9 @@ class GifConverterApp(QMainWindow):
             speed=speed,
             start_time=start_time,
             end_time=end_time if end_time > start_time else None,
+            show_speed_badge=show_speed_badge,
+            badge_position=badge_position,
+            badge_size=badge_size,
         )
 
     def _on_read_progress(self, current: int, total: int) -> None:
