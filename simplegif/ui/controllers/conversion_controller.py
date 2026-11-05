@@ -24,6 +24,7 @@ class ConversionWorker(QThread):
         frame_skip: int,
         less_colors: bool,
         overwrite: bool,
+        speed: float = 1.0,
         start_time: float = 0.0,
         end_time: float | None = None,
         max_frames: int | None = None,
@@ -36,6 +37,7 @@ class ConversionWorker(QThread):
         self.frame_skip = frame_skip
         self.less_colors = less_colors
         self.overwrite = overwrite
+        self.speed = speed
         self.start_time = start_time
         self.end_time = end_time
         self.max_frames = max_frames
@@ -48,6 +50,7 @@ class ConversionWorker(QThread):
                 output_path=self.output_path,
                 scale=self.scale,
                 less_colors=self.less_colors,
+                speed=self.speed,
                 max_frames=self.max_frames,
                 frame_skip=self.frame_skip,
                 overwrite=self.overwrite,
@@ -95,6 +98,7 @@ class ConversionController(QObject):
         frame_skip: int,
         less_colors: bool,
         overwrite: bool,
+        speed: float = 1.0,
         start_time: float = 0.0,
         end_time: float | None = None,
         max_frames: int | None = None,
@@ -108,6 +112,7 @@ class ConversionController(QObject):
             frame_skip=frame_skip,
             less_colors=less_colors,
             overwrite=overwrite,
+            speed=speed,
             start_time=start_time,
             end_time=end_time,
             max_frames=max_frames,

@@ -15,9 +15,11 @@ class GifWriter:
     """Escritor e codificador de GIFs animados baseado no Pillow com suporte a progresso em tempo real."""
 
     @staticmethod
-    def calculate_frame_duration_ms(video_fps: float, frame_skip: int) -> int:
-        """Calcula a duração por quadro em milissegundos respeitando a taxa real de amostragem."""
-        effective_fps = max(1.0, video_fps / max(1, frame_skip))
+    def calculate_frame_duration_ms(
+        video_fps: float, frame_skip: int, speed: float = 1.0
+    ) -> int:
+        """Calcula a duração por quadro em milissegundos respeitando a taxa real de amostragem e a velocidade."""
+        effective_fps = max(1.0, (video_fps / max(1, frame_skip)) * max(0.1, speed))
         return max(20, int(round((1.0 / effective_fps) * 1000)))
 
     @staticmethod

@@ -287,3 +287,52 @@ def test_overwrite_blocking_when_file_exists(
         window.worker.wait(2000)
     finally:
         window.close()
+
+
+def test_speed_control_ui_parsing_and_preview_sync(
+    qapp: QApplication, sample_video_path: Path
+) -> None:
+    """Valida o seletor de velocidade, parsing flexível, cálculo de duração e timer do preview."""
+    window = GifConverterApp()
+    try:
+        window.load_video_file(sample_video_path)
+
+        # 1. Padrão inicial é 1.0x (vídeo sintético de 3.0s)
+        assert window.screen_options.get_selected_speed() == 1.0
+        assert "Duração: 00:03.0" in window.lbl_size_estimate.text()
+
+        # 2. Seleção de preset 2.0x (3.0s / 2.0 = 1.5s)
+        window.combo_speed.setCurrentText("2.0x")
+        assert window.screen_options.get_selected_speed() == 2.0
+        assert "Duração: 00:01.5 (2x)" in window.lbl_size_estimate.text()
+
+        # 3. Digitação customizada com vírgula (ex: 1,5 -> 3.0s / 1.5 = 2.0s)
+        window.combo_speed.setEditText("1,5")
+        assert window.screen_options.get_selected_speed() == 1.5
+        assert "Duração: 00:02.0 (1.5x)" in window.lbl_size_estimate.text()
+
+        # 4. Digitação com sufixo 'x' (ex: 2.5x -> 3.0s / 2.5 = 1.2s)
+        window.combo_speed.setEditText("2.5x")
+        assert window.screen_options.get_selected_speed() == 2.5
+        assert "Duração: 00:01.2 (2.5x)" in window.lbl_size_estimate.text()
+
+        # 5. Entrada menor que 0.1 é limitada a 0.1
+        window.combo_speed.setEditText("0.05")
+        assert window.screen_options.get_selected_speed() == 0.1
+
+        # 6. Entrada inválida faz fallback para 1.0
+        window.combo_speed.setEditText("invalido")
+        assert window.screen_options.get_selected_speed() == 1.0
+
+        # 7. Sincronização com o preview player
+        window.combo_speed.setCurrentText("2.0x")
+        window.preview_controller.start_playback(0, 29, 0, speed=2.0)
+        assert window.preview_controller.is_playing
+        assert window.preview_controller._playback_speed == 2.0
+
+        # Altera velocidade enquanto roda o preview
+        window.combo_speed.setEditText("0.5")
+        assert window.preview_controller._playback_speed == 0.5
+        window.preview_controller.stop_playback()
+    finally:
+        window.close()

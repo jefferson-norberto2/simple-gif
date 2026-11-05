@@ -172,3 +172,45 @@ def test_offline_isolation_during_range_conversion(
         frame_skip=2,
     )
     assert out_file.is_file()
+
+
+def test_convert_file_with_playback_speed(sample_video_path: Path, tmp_path: Path) -> None:
+    """Verifica se a conversão com velocidade ajusta a duração dos quadros no GIF."""
+    gif_maker = SimpleGIF()
+
+    # Duração calculada diretamente
+    dur_1x = GifWriter.calculate_frame_duration_ms(video_fps=10.0, frame_skip=1, speed=1.0)
+    dur_2x = GifWriter.calculate_frame_duration_ms(video_fps=10.0, frame_skip=1, speed=2.0)
+    dur_half = GifWriter.calculate_frame_duration_ms(video_fps=10.0, frame_skip=1, speed=0.5)
+
+    assert dur_1x == 100
+    assert dur_2x == 50
+    assert dur_half == 200
+
+    out_2x = tmp_path / "speed_2x.gif"
+    gif_maker.convert_file(
+        path=sample_video_path,
+        output_path=out_2x,
+        scale=0.5,
+        speed=2.0,
+        frame_skip=1,
+        start_time=0.0,
+        end_time=1.0,
+        overwrite=True,
+    )
+    with Image.open(out_2x) as img:
+        assert img.info["duration"] == 50
+
+    out_half = tmp_path / "speed_half.gif"
+    gif_maker.convert_file(
+        path=sample_video_path,
+        output_path=out_half,
+        scale=0.5,
+        speed=0.5,
+        frame_skip=1,
+        start_time=0.0,
+        end_time=1.0,
+        overwrite=True,
+    )
+    with Image.open(out_half) as img:
+        assert img.info["duration"] == 200

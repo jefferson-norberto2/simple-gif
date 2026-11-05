@@ -161,6 +161,23 @@ class OptionsScreen(QWidget):
         grid.addWidget(lbl_skip, 1, 0)
         grid.addWidget(self.spin_frame_skip, 1, 1)
 
+        lbl_speed = QLabel("Velocidade:")
+        self.combo_speed = QComboBox()
+        self.combo_speed.setEditable(True)
+        self.combo_speed.addItems([
+            "0.5x",
+            "1.0x (Padrão)",
+            "1.25x",
+            "1.5x",
+            "2.0x",
+            "3.0x",
+            "4.0x",
+        ])
+        self.combo_speed.setCurrentIndex(1)  # 1.0x (Padrão)
+        self.combo_speed.currentTextChanged.connect(lambda _t: self.options_changed.emit())
+        grid.addWidget(lbl_speed, 2, 0)
+        grid.addWidget(self.combo_speed, 2, 1)
+
         right_layout.addLayout(grid)
 
         # Checkbox de paleta de cores mantido aqui
@@ -230,6 +247,23 @@ class OptionsScreen(QWidget):
         """Retorna o fator numérico de escala com base na opção selecionada."""
         return SCALE_MAP.get(self.combo_scale.currentText(), 0.75)
 
+    def get_selected_speed(self) -> float:
+        """Retorna a velocidade de reprodução numérica validada (> 0.1)."""
+        text = self.combo_speed.currentText().strip()
+        clean = (
+            text.replace("(Padrão)", "")
+            .replace("padrão", "")
+            .replace("x", "")
+            .replace("X", "")
+            .strip()
+        )
+        clean = clean.replace(",", ".")
+        try:
+            val = float(clean)
+            return max(0.1, val)
+        except ValueError:
+            return 1.0
+
     def set_size_estimate_text(self, text: str) -> None:
         """Atualiza a mensagem no badge de estimativa e restaura visibilidade padrão."""
         self.lbl_size_estimate.setText(text)
@@ -243,6 +277,7 @@ class OptionsScreen(QWidget):
         self.entry_output_dir.setText("")
         self.entry_gif_name.setText("")
         self.chk_overwrite.setChecked(False)
+        self.combo_speed.setCurrentIndex(1)
         self.lbl_video_meta.setText("")
         self.video_preview.reset()
 
@@ -330,5 +365,6 @@ class OptionsScreen(QWidget):
         self.chk_overwrite.setEnabled(enabled)
         self.combo_scale.setEnabled(enabled)
         self.spin_frame_skip.setEnabled(enabled)
+        self.combo_speed.setEnabled(enabled)
         self.chk_less_colors.setEnabled(enabled)
         self.video_preview.set_controls_enabled(enabled)

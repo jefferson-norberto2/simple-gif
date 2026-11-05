@@ -33,6 +33,7 @@ class PreviewController(QObject):
         self._playback_start: int = 0
         self._playback_end: int = 0
         self._playback_current: int = 0
+        self._playback_speed: float = 1.0
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_timer_tick)
@@ -85,15 +86,19 @@ class PreviewController(QObject):
         self.frame_ready.emit(pixmap, frame_index)
         return pixmap
 
-    def toggle_playback(self, start_frame: int, end_frame: int, current_frame: int) -> None:
+    def toggle_playback(
+        self, start_frame: int, end_frame: int, current_frame: int, speed: float = 1.0
+    ) -> None:
         """Alterna entre reproduzir e pausar o trecho selecionado em loop."""
         if self.is_playing:
             self.stop_playback()
         else:
-            self.start_playback(start_frame, end_frame, current_frame)
+            self.start_playback(start_frame, end_frame, current_frame, speed=speed)
 
-    def start_playback(self, start_frame: int, end_frame: int, current_frame: int) -> None:
-        """Inicia a reprodução do trecho selecionado em loop."""
+    def start_playback(
+        self, start_frame: int, end_frame: int, current_frame: int, speed: float = 1.0
+    ) -> None:
+        """Inicia a reprodução do trecho selecionado em loop com velocidade configurável."""
         if self.reader is None:
             return
 
@@ -104,10 +109,23 @@ class PreviewController(QObject):
             if (start_frame <= current_frame <= end_frame)
             else start_frame
         )
+        self._playback_speed = max(0.1, speed)
 
-        interval_ms = max(30, int(round(1000.0 / min(30.0, self.video_fps))))
+        base_fps = min(30.0, self.video_fps)
+        effective_fps = max(1.0, base_fps * self._playback_speed)
+        interval_ms = max(20, int(round(1000.0 / effective_fps)))
+
         self._timer.start(interval_ms)
         self.playback_state_changed.emit(True)
+
+    def set_playback_speed(self, speed: float) -> None:
+        """Ajusta a velocidade de reprodução em tempo real se o preview estiver ativo."""
+        self._playback_speed = max(0.1, speed)
+        if self.is_playing:
+            base_fps = min(30.0, self.video_fps)
+            effective_fps = max(1.0, base_fps * self._playback_speed)
+            interval_ms = max(20, int(round(1000.0 / effective_fps)))
+            self._timer.setInterval(interval_ms)
 
     def stop_playback(self) -> None:
         """Interrompe a reprodução do preview."""

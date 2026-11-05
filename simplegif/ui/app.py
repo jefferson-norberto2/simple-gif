@@ -151,6 +151,10 @@ class GifConverterApp(QMainWindow):
         return self.screen_options.combo_scale
 
     @property
+    def combo_speed(self) -> QComboBox:
+        return self.screen_options.combo_speed
+
+    @property
     def spin_frame_skip(self) -> QSpinBox:
         return self.screen_options.spin_frame_skip
 
@@ -251,7 +255,8 @@ class GifConverterApp(QMainWindow):
     def _on_toggle_playback_requested(self) -> None:
         start_f, end_f = self.screen_options.video_preview.get_selected_range_frames()
         curr_f = self.screen_options.video_preview.range_slider.current_value()
-        self.preview_controller.toggle_playback(start_f, end_f, curr_f)
+        speed = self.screen_options.get_selected_speed()
+        self.preview_controller.toggle_playback(start_f, end_f, curr_f, speed=speed)
 
     def browse_output_dir(self) -> None:
         """Permite ao usuário escolher outra pasta de destino."""
@@ -283,6 +288,8 @@ class GifConverterApp(QMainWindow):
         """Responde a qualquer alteração nos parâmetros restaurando a estimativa."""
         if not self.conversion_controller.is_running:
             self.screen_options.restore_estimate_display()
+            speed = self.screen_options.get_selected_speed()
+            self.preview_controller.set_playback_speed(speed)
             self._update_size_estimate()
 
     def _update_size_estimate(self) -> None:
@@ -293,18 +300,29 @@ class GifConverterApp(QMainWindow):
 
         meta = self.preview_controller.reader.metadata
         scale = self.screen_options.get_selected_scale()
+        speed = self.screen_options.get_selected_speed()
         frame_skip = self.spin_frame_skip.value()
         start_f, end_f = self.screen_options.video_preview.get_selected_range_frames()
         clip_frames = max(1, end_f - start_f + 1)
         output_frames = (clip_frames + frame_skip - 1) // frame_skip
+
+        start_sec, end_sec = self.screen_options.video_preview.get_selected_time_range()
+        clip_duration = max(0.0, end_sec - start_sec)
+        gif_duration = clip_duration / speed if speed > 0 else clip_duration
 
         target_w, target_h = FrameProcessor.calculate_target_dimensions(
             meta.width, meta.height, scale
         )
         estimated_bytes = self.get_estimated_gif_size_bytes()
         formatted_size = GifWriter.format_file_size(estimated_bytes)
+
+        if abs(speed - 1.0) > 0.01:
+            dur_info = f" • Duração: {format_seconds(gif_duration)} ({speed:.2g}x)"
+        else:
+            dur_info = f" • Duração: {format_seconds(gif_duration)}"
+
         self.screen_options.set_size_estimate_text(
-            f"📊 Tamanho estimado: ~{formatted_size} ({target_w}x{target_h} px • {output_frames} quadros)"
+            f"📊 Tamanho estimado: ~{formatted_size} ({target_w}x{target_h} px • {output_frames} quadros{dur_info})"
         )
 
     @staticmethod
@@ -357,6 +375,7 @@ class GifConverterApp(QMainWindow):
         self.preview_controller.stop_playback()
 
         scale = self.screen_options.get_selected_scale()
+        speed = self.screen_options.get_selected_speed()
         frame_skip = self.spin_frame_skip.value()
         less_colors = self.chk_less_colors.isChecked()
         start_time, end_time = self.screen_options.video_preview.get_selected_time_range()
@@ -370,6 +389,7 @@ class GifConverterApp(QMainWindow):
             frame_skip=frame_skip,
             less_colors=less_colors,
             overwrite=overwrite,
+            speed=speed,
             start_time=start_time,
             end_time=end_time if end_time > start_time else None,
         )

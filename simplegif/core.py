@@ -33,6 +33,7 @@ class SimpleGIF:
         output_path: str | Path = "outputs",
         scale: float = 0.6,
         less_colors: bool = False,
+        speed: float = 1.0,
         max_frames: int | None = None,
         frame_skip: int = 5,
         overwrite: bool = False,
@@ -49,6 +50,7 @@ class SimpleGIF:
             output_path: Diretório de destino ou caminho completo do arquivo .gif resultante.
             scale: Fator de escala para redimensionamento dos quadros (> 0).
             less_colors: Se True, reduz a paleta de cores para gerar GIFs menores.
+            speed: Multiplicador de velocidade de reprodução do GIF (> 0.0).
             max_frames: Número máximo de quadros a processar (>= 1).
             frame_skip: Intervalo de amostragem de quadros (>= 1).
             overwrite: Se True, permite sobrescrever o arquivo de saída existente.
@@ -64,6 +66,7 @@ class SimpleGIF:
         options = ConversionOptions(
             scale=scale,
             frame_skip=frame_skip,
+            speed=speed,
             less_colors=less_colors,
             max_frames=max_frames,
             overwrite=overwrite,
@@ -109,7 +112,7 @@ class SimpleGIF:
                 processed_frames.append(processed_img)
 
             duration_ms = GifWriter.calculate_frame_duration_ms(
-                metadata.fps, options.frame_skip
+                metadata.fps, options.frame_skip, speed=options.speed
             )
 
         if not processed_frames:
@@ -137,6 +140,7 @@ class SimpleGIF:
         output_path: str | Path = "outputs",
         scale: float = 0.6,
         less_colors: bool = False,
+        speed: float = 1.0,
         max_frames: int = 2000,
         frame_skip: int = 5,
         overwrite: bool = False,
@@ -148,6 +152,7 @@ class SimpleGIF:
             output_path: Pasta onde os arquivos GIF gerados serão salvos.
             scale: Fator de escala para redimensionamento dos quadros.
             less_colors: Flag para reduzir a profundidade de cor.
+            speed: Multiplicador de velocidade de reprodução do GIF.
             max_frames: Máximo de quadros a processar por arquivo de vídeo.
             frame_skip: Intervalo entre quadros processados.
             overwrite: Se True, sobrescreve arquivos GIF existentes.
@@ -172,6 +177,7 @@ class SimpleGIF:
                     output_path=output_dir,
                     scale=scale,
                     less_colors=less_colors,
+                    speed=speed,
                     max_frames=max_frames,
                     frame_skip=frame_skip,
                     overwrite=overwrite,
@@ -185,6 +191,7 @@ class SimpleGIF:
         path: str | Path,
         scale: float = 0.6,
         less_colors: bool = False,
+        speed: float = 1.0,
         max_frames: int | None = None,
         frame_skip: int = 5,
         start_time: float = 0.0,
@@ -194,6 +201,7 @@ class SimpleGIF:
         options = ConversionOptions(
             scale=scale,
             frame_skip=frame_skip,
+            speed=speed,
             less_colors=less_colors,
             max_frames=max_frames,
             start_time=start_time,
